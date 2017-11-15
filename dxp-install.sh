@@ -3,7 +3,7 @@
 # *                                                                                    *
 # *  DXP demo VM installation script.                                                  *
 # *  Written by : Gerben Kranenborg                                                    *
-# *  Date : October 21, 2017                                                           *
+# *  Date : October 20, 2017                                                           *
 # *                                                                                    *
 # **************************************************************************************
 
