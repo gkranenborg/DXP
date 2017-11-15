@@ -1,0 +1,86 @@
+Init()
+{
+	STATUSresult=/var/www/html/scripts/STATUSresult.json
+	README=/root/README.txt
+	VERSIONresult=/var/www/html/scripts/version.json
+}
+
+Checks()
+{
+	if ps -ef|grep "/opt/jboss-eap-6.4/bin/domain.sh" | grep -v grep >/dev/null
+	then
+		IBPMstatus="Running"
+	else
+		IBPMstatus="Stopped"
+	fi
+	if [ -f /etc/rc.d/init.d/oracle-xe ]
+	then
+		if service oracle-xe status|grep "no listener" >/dev/null
+		then
+			if service oracle-xe status|grep "Connection refused" >/dev/null
+			then
+				Databasestatus="Stopped"
+			fi
+		else
+				Databasestatus="Running"
+		fi
+	else
+		if ps -ef|grep "edb-postgres -D"|grep -v grep >/dev/null
+		then
+			Databasestatus="Running"
+		else
+			if ps -ef|grep "postgres -D"|grep -v grep >/dev/null
+			then
+				Databasestatus="Running"
+			else
+				Databasestatus="Stopped"
+			fi
+		fi
+	fi
+	if ps -ef|grep "catalina" | grep "tomcat" >/dev/null
+	then
+		Tomcatstatus="Running"
+	else
+		Tomcatstatus="Stopped"
+	fi
+	if ps -ef|grep "nginx: master process"|grep -v "grep" >/dev/null
+	then
+		Nginxstatus="Running"
+	else
+		Nginxstatus="Stopped"
+	fi
+	if ps -ef|grep "kibana" | grep "node" >/dev/null
+	then
+		Kibanastatus="Running"
+	else
+		Kibanastatus="Stopped"
+	fi
+	if service elasticsearch status | grep "running" >/dev/null
+	then
+		ESstatus="Running"
+	else
+		ESstatus="Stopped"
+	fi
+	if ps -ef|grep alfresco|grep org.apache.catalina.startup.Bootstrap >/dev/null
+	then
+		Alfrescostatus="Running"
+	else
+		Alfrescostatus="Stopped"
+	fi
+	echo "{\"database\":\"$Databasestatus\",\"jbossibpm\":\"$IBPMstatus\",\"tomcat\":\"$Tomcatstatus\",\"kibana\":\"$Kibanastatus\",\"elasticsearch\":\"$ESstatus\",\"alfresco\":\"$Alfrescostatus\",\"nginx\":\"$Nginxstatus\"}">$STATUSresult
+}
+
+Version()
+{
+	VERSION=`cat $README|grep "version :"|cut -f2 -d":"|sed 's/[^0-9]*//g'`
+	echo "{\"version\":\"$VERSION\"}">$VERSIONresult
+}
+
+Main()
+{
+	Init
+	Checks
+	Version
+}
+
+Main

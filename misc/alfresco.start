@@ -1,0 +1,4 @@
+if ! grep db.schema.update=false /opt/alfresco-community/tomcat/shared/classes/alfresco-global.properties
+then
+	echo "db.schema.update=false" >>/opt/alfresco-community/tomcat/shared/classes/alfresco-global.properties
+fi

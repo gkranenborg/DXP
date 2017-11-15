@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+    <Context antiJARLocking="true" path="/flowable-rest">
+        <Resource auth="Container"
+            name="/flowable"
+            type="javax.sql.DataSource"
+            description="JDBC DataSource"
+            url="jdbc:postgresql://localhost:5432/flowable"
+            driverClassName="org.postgresql.Driver"
+            username="flowable"
+            password="Fujitsu1"
+            defaultAutoCommit="false"
+            initialSize="5"/>
+        </Context>

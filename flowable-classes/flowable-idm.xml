@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+    <Context path="/flowable-idm">
+        <Resource auth="Container"
+            name="jdbc/flowable-idm"
+            type="javax.sql.DataSource"
+            url="jdbc:postgresql://localhost:5432/flowableidm"
+            driverClassName="org.postgresql.Driver"
+            username="flowable"
+            password="flowable"/>
+        </Context>

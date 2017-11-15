@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+    <Context path="/flowable-modeler">
+        <Resource auth="Container"
+            name="jdbc/flowable-modeler"
+            type="javax.sql.DataSource"
+            url="jdbc:postgresql://localhost:5432/flowablemodeler"
+            driverClassName="org.postgresql.Driver"
+            username="flowable"
+            password="flowable"/>
+        </Context>

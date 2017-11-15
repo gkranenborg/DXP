@@ -1,0 +1,10 @@
+alter user postgres password 'Fujitsu1';
+create user flowable password 'flowable';
+create database flowable owner flowable;
+create database flowableadmin owner flowable;
+create database flowableidm owner flowable;
+create database flowablemodeler owner flowable;
+grant all privileges on database flowable to flowable;
+grant all privileges on database flowableadmin to flowable;
+grant all privileges on database flowableidm to flowable;
+grant all privileges on database flowablemodeler to flowable;

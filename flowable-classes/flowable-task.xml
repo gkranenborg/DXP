@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+    <Context path="/flowable-admin">
+        <Resource auth="Container"
+            name="jdbc/flowable-task"
+            type="javax.sql.DataSource"
+            url="jdbc:postgresql://localhost:5432/flowable"
+            driverClassName="org.postgresql.Driver"
+            username="flowable"
+            password="flowable"/>
+        </Context>
