@@ -79,6 +79,10 @@
 		<div class="tools">
          <a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}9990/" target="_blank">JBoss console.</a><font color="black" ng-show="appinstall.ibpm == 'true'"> (admin/Fujitsu.1)<br><br></font>
 		 <a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}49950/aa/kibana" target="_blank">Kibana.</a>
+		 <div class="license" ng-show="appinstall.ibpm == 'true'">
+		 	<br>
+		 	(Note: To access Kibana, please first setup a user account and grand 'admin' rights to this user, using the 'DXP Monitor'.)
+		 </div>
 		 <a ng-show="appinstall.rea == 'true'" href="{{baseurl}}81/app/kibana" target="_blank">Kibana.</a><font color="black" ng-show="appinstall.rea == 'true'"> (demo / Fujitsu1)<br><br></font>
 		</div>
 		 <a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}49950/posthoc" target="_blank">E-mail.</a><br ng-show="appinstall.ibpm == 'true'"><br ng-show="appinstall.ibpm == 'true'">
