@@ -3,7 +3,7 @@
 # *                                                                                    *
 # *  DXP demo VM installation script.                                                  *
 # *  Written by : Gerben Kranenborg                                                    *
-# *  Date : October 21, 2017                                                           *
+# *  Date : October 20, 2017                                                           *
 # *                                                                                    *
 # **************************************************************************************
 
@@ -15,7 +15,7 @@ Init()
 # *                                                                                    *
 # **************************************************************************************
 
-	VERSION="13.1"
+	VERSION="13.2"
 	INSTALL_FILE_DIR=`pwd`
 	CONFIG_FILE=$INSTALL_FILE_DIR/dxp.config
 	SOFTWARE=$INSTALL_FILE_DIR/software
@@ -376,24 +376,29 @@ Change_os_settings()
 	fi
 	if [ ! -f $INSTALL_LOG_DIR/networkchange.log ]
 	then
-		case "$APPLICATION" in
-			IBPM)
-				NEWHOSTNAME="$IBPMHOSTNAME"
-			;;
-			FLOWABLE)
-				NEWHOSTNAME="$FLOWHOSTNAME"
-			;;
-			REA)
-				NEWHOSTNAME="$REAHOSTNAME"
-			;;
-		esac
-		hostnamectl set-hostname $NEWHOSTNAME> $ILOG 2>>$ERROR
-		ret=$?
-		if [ $ret -ne 0 ]
+		if [ "$DEMOVM" = "true" ]
 		then
-			Screen_output 0 "The VM's hostname could not be changed to $NEWHOSTNAME"
-			echo " Errorcode : $ret"
-			Abort_install
+			case "$APPLICATION" in
+				IBPM)
+					NEWHOSTNAME="$IBPMHOSTNAME"
+				;;
+				FLOWABLE)
+					NEWHOSTNAME="$FLOWHOSTNAME"
+				;;
+				REA)
+					NEWHOSTNAME="$REAHOSTNAME"
+				;;
+			esac
+			hostnamectl set-hostname $NEWHOSTNAME> $ILOG 2>>$ERROR
+			ret=$?
+			if [ $ret -ne 0 ]
+			then
+				Screen_output 0 "The VM's hostname could not be changed to $NEWHOSTNAME"
+				echo " Errorcode : $ret"
+				Abort_install
+			fi
+		else
+			NEWHOSTNAME=`hostname`
 		fi
 		HOSTENTRY=`grep $NEWHOSTNAME /etc/hosts`
 		if [ "$HOSTENTRY" = "" ]
@@ -438,23 +443,25 @@ Install_scripts()
 	echo "*** Installing Service scripts ***" >>$ERROR
 	
 # **** Create / Install script to handle IP address changes ****
-
-	echo "#!/bin/sh" > /etc/rc.d/init.d/ipchange
-	echo "#" >> /etc/rc.d/init.d/ipchange
-	echo "# chkconfig: 3 70 05" >> /etc/rc.d/init.d/ipchange
-	echo "#" >> /etc/rc.d/init.d/ipchange
-	echo "PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin" >> /etc/rc.d/init.d/ipchange
-	echo "NEWVMIP=\`ip addr | grep \"inet\" | grep -ve \"127.0.0.1\" | grep -ve \"inet6\" | awk '{print \$2}' | cut -f1 -d\"/\"\`" >> /etc/rc.d/init.d/ipchange
-	echo "HOSTNAME=\`hostname\`" >> /etc/rc.d/init.d/ipchange
-	echo "OLDVMIP=\`grep \$HOSTNAME /etc/hosts | cut -f1 -d'	'\`" >> /etc/rc.d/init.d/ipchange
-	echo "sed -i -e \"s/\$HOSTNAME//g\" /etc/hosts 2>$ILOG" >> /etc/rc.d/init.d/ipchange
-	echo "sed -i -e \"s/\$NEWVMIP//g\" /etc/hosts 2>$ILOG" >> /etc/rc.d/init.d/ipchange
-	echo "sed -i -e \"s/\$OLDVMIP//g\" /etc/hosts 2>$ILOG" >> /etc/rc.d/init.d/ipchange
-	echo "sed -i '/^\s*$/d' /etc/hosts 2>$ILOG" >> /etc/rc.d/init.d/ipchange
-	echo "echo \"\$NEWVMIP	\$HOSTNAME\" >> /etc/hosts" >> /etc/rc.d/init.d/ipchange
-	chmod 755 /etc/rc.d/init.d/ipchange 2>>$ERROR
-	chkconfig --add ipchange 2>>$ERROR
-	chkconfig --level 3 ipchange on 2>>$ERROR
+	if [ "$DEMOVM" = "true" ]
+	then
+		echo "#!/bin/sh" > /etc/rc.d/init.d/ipchange
+		echo "#" >> /etc/rc.d/init.d/ipchange
+		echo "# chkconfig: 3 70 05" >> /etc/rc.d/init.d/ipchange
+		echo "#" >> /etc/rc.d/init.d/ipchange
+		echo "PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin" >> /etc/rc.d/init.d/ipchange
+		echo "NEWVMIP=\`ip addr | grep \"inet\" | grep -ve \"127.0.0.1\" | grep -ve \"inet6\" | awk '{print \$2}' | cut -f1 -d\"/\"\`" >> /etc/rc.d/init.d/ipchange
+		echo "HOSTNAME=\`hostname\`" >> /etc/rc.d/init.d/ipchange
+		echo "OLDVMIP=\`grep \$HOSTNAME /etc/hosts | cut -f1 -d'	'\`" >> /etc/rc.d/init.d/ipchange
+		echo "sed -i -e \"s/\$HOSTNAME//g\" /etc/hosts 2>$ILOG" >> /etc/rc.d/init.d/ipchange
+		echo "sed -i -e \"s/\$NEWVMIP//g\" /etc/hosts 2>$ILOG" >> /etc/rc.d/init.d/ipchange
+		echo "sed -i -e \"s/\$OLDVMIP//g\" /etc/hosts 2>$ILOG" >> /etc/rc.d/init.d/ipchange
+		echo "sed -i '/^\s*$/d' /etc/hosts 2>$ILOG" >> /etc/rc.d/init.d/ipchange
+		echo "echo \"\$NEWVMIP	\$HOSTNAME\" >> /etc/hosts" >> /etc/rc.d/init.d/ipchange
+		chmod 755 /etc/rc.d/init.d/ipchange 2>>$ERROR
+		chkconfig --add ipchange 2>>$ERROR
+		chkconfig --level 3 ipchange on 2>>$ERROR
+	fi
 	
 # **** Installation of VM welcome screen scripts ****
 
@@ -1434,6 +1441,10 @@ Install_war()
 					jar xvf $INSTALL_LOG_DIR/aa.war -x WEB-INF/iFlowClient.properties >$ILOG 2>>$ERROR
 					sed -i -e "s/127.0.0.1/$NEWHOSTNAME/g" $INSTALL_LOG_DIR/WEB-INF/EmailNotification.properties 2>>$ERROR
 					sed -i -e "s/interstagedemo/$NEWHOSTNAME/g" $INSTALL_LOG_DIR/WEB-INF/iFlowClient.properties 2>>$ERROR
+					sed -i -e "s/ApiPassword=\*\*\*\*\*\*\*\*/ApiPassword=$APIPASSWORD/g" $INSTALL_LOG_DIR/WEB-INF/iFlowClient.properties 2>>$ERROR
+					sed -i -e "s/SuperPassword=\*\*\*\*\*\*\*\*/SuperPassword=$SUPERPASSWORD/g" $INSTALL_LOG_DIR/WEB-INF/iFlowClient.properties 2>>$ERROR
+					sed -i -e "s/DmsPassword=\*\*\*\*\*\*\*\*/DmsPassword=$DMSPASSWORD/g" $INSTALL_LOG_DIR/WEB-INF/iFlowClient.properties 2>>$ERROR
+					sed -i -e 's/SSOToken=\*\*\*\*\*\*\*\*/#SSOToken=\*\*\*\*\*\*\*\*/g' $INSTALL_LOG_DIR/WEB-INF/iFlowClient.properties 2>>$ERROR
 					jar uvf aa.war WEB-INF >$ILOG 2>>$ERROR
 					cd $INSTALL_FILE_DIR
 					rm -rf $INSTALL_LOG_DIR/WEB-INF
@@ -1968,7 +1979,7 @@ Create_appversion()
 			if [ "$INSTALLJBOSS" = "true" ]
 			then
 				JBOSS_VERSION="$VJBOSS"
-				if [ "$VJBOSS" = "6.4"
+				if [ "$VJBOSS" = "6.4" ]
 				then
 					JBOSS_VERSION="6.4.9"
 				fi
@@ -2500,8 +2511,13 @@ Main()
 	
 	if [ ! -f $INSTALL_LOG_DIR/rootpwreset.log ]
 	then
-		Paint_screen Completed Completed Completed Completed Running Waiting
-		Reset_rootpw
+		if [ "$DEMOVM" = "true" ]
+		then
+			Paint_screen Completed Completed Completed Completed Running Waiting
+			Reset_rootpw
+		else
+			Paint_screen Completed Completed Completed Completed Skipping Waiting
+		fi
 	else
 		Paint_screen Completed Completed Completed Completed Completed Waiting
 	fi
@@ -2573,7 +2589,7 @@ Main()
 			Paint_screen Running Waiting Waiting Waiting Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
 		;;
 		REA)
-			Paint_screen Running Waiting Waiting Waiting Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+			Paint_screen Running Waiting Waiting Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
 		;;
 	esac
 	Check_tools
@@ -2631,7 +2647,7 @@ Main()
 				Paint_screen Completed Running Waiting Waiting Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
 			;;
 			REA)
-				Paint_screen Completed Running Waiting Waiting Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				Paint_screen Completed Running Waiting Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
 			;;
 		esac
 		Install_jdk
@@ -2690,7 +2706,7 @@ Main()
 				Paint_screen Completed Completed Running Waiting Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
 			;;
 			REA)
-				Paint_screen Completed Completed Running Waiting Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				Paint_screen Completed Completed Running Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
 			;;
 		esac
 		Install_webpage
@@ -3213,27 +3229,22 @@ Main()
 		REA)
 			if [ ! -f $INSTALL_LOG_DIR/elasticsearch.log ]
 			then
-				Paint_screen Completed Completed Completed Running Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				Paint_screen Completed Completed Completed Running Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
 				Install_elastic
 			fi
 			if [ ! -f $INSTALL_LOG_DIR/kibana.log ]
 			then
-				Paint_screen Completed Completed Completed Completed Running Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				Paint_screen Completed Completed Completed Completed Running Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
 				Install_kibana
-			fi
-			if [ ! -f $INSTALL_LOG_DIR/kibanaplugin.log ]
-			then
-				Paint_screen Completed Completed Completed Completed Completed Running Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-				Install_kibanaplugin
 			fi
 			if [ ! -f $INSTALL_LOG_DIR/esgui.log ]
 			then
-				Paint_screen Completed Completed Completed Completed Completed Completed Running Waiting Waiting Waiting $SCLEARLOG Waiting
+				Paint_screen Completed Completed Completed Completed Completed Running Waiting Waiting Waiting $SCLEARLOG Waiting
 				Install_esgui
 			fi
 			if [ ! -f $INSTALL_LOG_DIR/rea.log ]
 			then
-				Paint_screen Completed Completed Completed Completed Completed Completed Completed Running Waiting Waiting $SCLEARLOG Waiting
+				Paint_screen Completed Completed Completed Completed Completed Completed Running Waiting Waiting $SCLEARLOG Waiting
 				Install_rea
 			fi
 		;;
@@ -3289,7 +3300,7 @@ Main()
 				Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Running Waiting $SCLEARLOG Waiting
 			;;
 			REA)
-				Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Running Waiting $SCLEARLOG Waiting
+				Paint_screen Completed Completed Completed Completed Completed Completed Completed Running Waiting $SCLEARLOG Waiting
 			;;
 		esac
 		Install_chat
@@ -3343,7 +3354,7 @@ Main()
 			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Running $SCLEARLOG Waiting
 		;;
 		REA)
-			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Running $SCLEARLOG Waiting
+			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Running $SCLEARLOG Waiting
 		;;
 	esac
 	Create_appversion
@@ -3402,7 +3413,7 @@ Main()
 			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed $SCLEARLOG Waiting
 		;;
 		REA)
-			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed $SCLEARLOG Waiting
+			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed $SCLEARLOG Waiting
 		;;
 	esac
 	Cleanup_install
@@ -3461,7 +3472,7 @@ Main()
 			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed $SCLEARLOG Triggered
 		;;
 		REA)
-			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed $SCLEARLOG Triggered
+			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed $SCLEARLOG Triggered
 		;;
 	esac
 	Last_reboot
