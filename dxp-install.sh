@@ -15,7 +15,7 @@ Init()
 # *                                                                                    *
 # **************************************************************************************
 
-	VERSION="13.2"
+	VERSION="13.3"
 	INSTALL_FILE_DIR=`pwd`
 	CONFIG_FILE=$INSTALL_FILE_DIR/dxp.config
 	SOFTWARE=$INSTALL_FILE_DIR/software
@@ -1120,6 +1120,8 @@ Install_bpmaction()
 	echo "*** Installing BPMAction ***" >>$ERROR
 	cp $INSTALL_FILE_DIR/bal-jars/*jar $TARGET_DIR/engine/server/instance/default/lib/ext 2>>$ERROR
 	cp $INSTALL_FILE_DIR/bal-jars/*txt $TARGET_DIR/engine/server/instance/default/resources 2>>$ERROR
+	cp $INSTALL_FILE_DIR/bal-jars/*bar $TARGET_DIR/engine/server/instance/default/lib/ext 2>>$ERROR
+	cp $INSTALL_FILE_DIR/bal-jars/*properties $TARGET_DIR/engine/server/instance/default/lib/ext 2>>$ERROR
 	touch $INSTALL_LOG_DIR/bpmaction.log
 }
 
@@ -2000,12 +2002,14 @@ Create_appversion()
 				jar xvf $INSTALL_FILE_DIR/options/ssofi.war WEB-INF/BuildInfo.properties >$ILOG
 				SSOFIVERSION=`cat WEB-INF/BuildInfo.properties|cut -f2 -d"="|grep "-"`
 				rm -rf WEB-INF >$ILOG
+				BALVERSION=`cat $INSTALL_FILE_DIR/bal-jars/*properties|cut -f2 -d"="|grep "-"`
 				IBPMINSTALLED="true"
 			else
 				IBPM_VERSION="not installed"
 				AAVERSION="not installed"
 				MAILVERSION="not installed"
 				SSOFIVERSION="not installed"
+				BALVERSION="not installed"
 				IBPMINSTALLED="false"
 			fi
 			if [ "$ALFRESCO" = "true" ]
@@ -2073,7 +2077,7 @@ Create_appversion()
 			NGINXVERSION=`cat $INSTALL_LOG_DIR/nginxversion|cut -f2 -d"/"`
 		;;
 	esac
-	echo "{\"installdate\":\"$INSTALLDATE\",\"script\":\"$VERSION\",\"vmversion\":\"$VMVERSION\",\"osversion\":\"$OSRELEASE\",\"jdk8\":\"$VJDK8\",\"database\":\"$DBVERSION\",\"jboss\":\"$JBOSS_VERSION\",\"ibpm\":\"$IBPM_VERSION\",\"es\":\"$VELK\",\"kibana\":\"$VELK\",\"chat\":\"$CHATVERSION\",\"aa\":\"$AAVERSION\",\"email\":\"$MAILVERSION\",\"ssofi\":\"$SSOFIVERSION\",\"alfresco\":\"$ALFRESCOVERSION\",\"flowable\":\"$FLOWABLEVERSION\",\"tomcat\":\"$TOMCATVERSION\",\"rea\":\"$REAVERSION\",\"nginx\":\"$NGINXVERSION\"}" >$APPVERSIONFILE
+	echo "{\"installdate\":\"$INSTALLDATE\",\"script\":\"$VERSION\",\"vmversion\":\"$VMVERSION\",\"osversion\":\"$OSRELEASE\",\"jdk8\":\"$VJDK8\",\"database\":\"$DBVERSION\",\"jboss\":\"$JBOSS_VERSION\",\"ibpm\":\"$IBPM_VERSION\",\"es\":\"$VELK\",\"kibana\":\"$VELK\",\"chat\":\"$CHATVERSION\",\"aa\":\"$AAVERSION\",\"email\":\"$MAILVERSION\",\"ssofi\":\"$SSOFIVERSION\",\"ballib\":\"$BALVERSION\",\"alfresco\":\"$ALFRESCOVERSION\",\"flowable\":\"$FLOWABLEVERSION\",\"tomcat\":\"$TOMCATVERSION\",\"rea\":\"$REAVERSION\",\"nginx\":\"$NGINXVERSION\"}" >$APPVERSIONFILE
 	echo "{\"database\":\"$DBINSTALLED\",\"jboss\":\"$JBOSSINSTALLED\",\"ibpm\":\"$IBPMINSTALLED\",\"es\":\"$ESINSTALLED\",\"kibana\":\"$KIBANAINSTALLED\",\"rea\":\"$REAINSTALLED\",\"nginx\":\"$NGINXINSTALLED\",\"alfresco\":\"$ALFRESCOINSTALLED\",\"flowable\":\"$FLOWABLEINSTALLED\"}" >$APPINSTALLFILE
 }
 
@@ -2192,8 +2196,10 @@ Modify_posthoc()
 	cd $INSTALL_LOG_DIR
 	cp $INSTALL_FILE_DIR/options/posthoc.war $INSTALL_LOG_DIR
 	jar xvf $INSTALL_LOG_DIR/posthoc.war -x WEB-INF/Config.properties >$ILOG 2>>$ERROR
+	jar xvf $INSTALL_LOG_DIR/posthoc.war -x WEB-INF/DataLocation.properties >$ILOG 2>>$ERROR
 	sed -i -e "s/interstagedemo/$NEWHOSTNAME/g" WEB-INF/Config.properties 2>>$ERROR
 	sed -i -e "s/127.0.0.1/$NEWHOSTNAME/g" WEB-INF/Config.properties 2>>$ERROR
+	sed -i -e "s/c://g" WEB-INF/DataLocation.properties 2>>$ERROR
 	jar uvf posthoc.war WEB-INF > $ILOG 2>>$ERROR
 	cd $TARGET_DIR
 }
