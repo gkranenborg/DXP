@@ -15,7 +15,7 @@ Init()
 # *                                                                                    *
 # **************************************************************************************
 
-	VERSION="13.3"
+	VERSION="13.4"
 	INSTALL_FILE_DIR=`pwd`
 	CONFIG_FILE=$INSTALL_FILE_DIR/dxp.config
 	SOFTWARE=$INSTALL_FILE_DIR/software
@@ -270,7 +270,6 @@ Check_install_files()
 		Check_file $SOFTWARE/I-BPM$VIBPM-EnterpriseEdition-CD_IMAGE.zip IBPM
 		Check_file $SOFTWARE/Patch/BZ-1358913.zip JBOSSBZ
 		Check_file $BAL_DIR/BPMActionLibrary.jar TMP
-		Check_file $BAL_DIR/mendo.jar TMP
 		Check_file $BAL_DIR/twitter4j-core-4.0.4.jar TMP
 		PNUM=1
 		while [ $PNUM -lt 10 ]
