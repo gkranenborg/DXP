@@ -20,9 +20,10 @@
  	<nav class="navbar navbar-inverse">
 	  <div class="container-fluid">
 	    <div class="navbar-header">
-	      <a ng-show="appinstall.ibpm == 'true'" class="navbar-brand">Fujitsu DXP (Enterprise)</a>
+	      <a ng-show="appinstall.ibpm == 'true' && appinstall.flowable == 'false'" class="navbar-brand">Fujitsu DXP (Enterprise)</a>
+	      <a ng-show="appinstall.ibpm == 'true' && appinstall.flowable == 'true'" class="navbar-brand">Fujitsu DXP (Enterprise+)</a>
 		  <a ng-show="appinstall.rea == 'true'" class="navbar-brand">Fujitsu DXP (Lite)</a>
-		  <a ng-show="appinstall.flowable == 'true'" class="navbar-brand">Fujitsu DXP (Community)</a>
+		  <a ng-show="appinstall.flowable == 'true' && appinstall.ibpm == 'false'" class="navbar-brand">Fujitsu DXP (Community)</a>
 	      <div class="navtext">
 	         <font color="Gainsboro" ng-show="appinstall.database == 'true'">Database : <div class="roundbutton {{getclassname(system.database)}}"></div></font>
 	         <font color="Gainsboro" ng-show="appinstall.jboss == 'true'">JBoss6.4.9 : <div class="roundbutton {{getclassname(system.jbossibpm)}}"></div></font>
@@ -52,32 +53,14 @@
    
    <div class="section">
       <u>Applications :</u><br><br>
-      <div class="urls">
-		<div class="tools">
+      <div class="urls row">
+		<div ng-show="appinstall.ibpm == 'true'" class="tools col-lg-2">
          <a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}49950/console/default/getDashboard.page" target="_blank">Interstage BPM console.</a><font color="black" ng-show="appinstall.ibpm == 'true'"> (admin / Fujitsu1)<br><br></font>
          <a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}49950/console/TenantManager.page" target="_blank">Interstage BPM Tenant Manager.</a><font color="black" ng-show="appinstall.ibpm == 'true'"> (admin / Fujitsu1)<br><br></font>
 		 <a ng-show="appinstall.rea == 'true'" href="{{baseurl}}81/ui3/#/dashboard" target="_blank">DXP REA.</a><font color="black" ng-show="appinstall.rea == 'true'"> (demo / Fujitsu1)<br><br></font>
-		 <a ng-show="appinstall.flowable == 'true'" href="{{baseurl}}8080/flowable-idm" target="_blank">Flowable IDM</a><font color="black" ng-show="appinstall.flowable == 'true'"> (admin / test)<br><br></font>
-		 <a ng-show="appinstall.flowable == 'true'" href="{{baseurl}}8080/flowable-admin" target="_blank">Flowable Admin</a><font color="black" ng-show="appinstall.flowable == 'true'"> (admin / test)<br><br></font>
-		</div>
-		<div class="tools">
 		 <a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}49950/aa" target="_blank">DXP Monitor.</a><br ng-show="appinstall.ibpm == 'true'"><br ng-show="appinstall.ibpm == 'true'">
-		 <a ng-show="appinstall.alfresco == 'true'" href="{{baseurl}}8080/share/page" target="_blank">Alfresco.</a><font color="black" ng-show="appinstall.alfresco == 'true'"> (admin / Fujitsu1)<br><br></font>
-		 <a ng-show="appinstall.flowable == 'true'" href="{{baseurl}}8080/flowable-modeler" target="_blank">Flowable Modeler</a><font color="black" ng-show="appinstall.flowable == 'true'"> (admin / test)<br><br></font>
-	     <a ng-show="appinstall.flowable == 'true'" href="{{baseurl}}8080/flowable-task" target="_blank">Flowable Task</a><font color="black" ng-show="appinstall.flowable == 'true'"> (admin / test)<br><br></font>
-		 <a ng-show="appinstall.flowable == 'true'" href="{{baseurl}}8080/flowable-rest/service/management/engine" target="_blank">Flowable REST</a><font color="black" ng-show="appinstall.flowable == 'true'"> (kermit / kermit)<br><br></font>
-		 </div>
-      </div>
-   </div>
-   <hr>
-   <br><br>
-   <!-- Section with Interstage BPM URL's. -->   
-   
-   <div class="section">
-      <u ng-show="appinstall.flowable == 'false'">Management :<br><br></u>
-      <div class="urls">
-		<div class="tools">
-         <a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}9990/" target="_blank">JBoss console.</a><font color="black" ng-show="appinstall.ibpm == 'true'"> (admin/Fujitsu.1)<br><br></font>
+		 <a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}9990/" target="_blank">JBoss console.</a><font color="black" ng-show="appinstall.ibpm == 'true'"> (admin/Fujitsu.1)<br><br></font>
+		 <a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}49950/ssofi/" target="_blank" >SSOFI ID Provider.</a><br ng-show="appinstall.ibpm == 'true'"><br ng-show="appinstall.ibpm == 'true'">
 		 <a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}49950/aa/kibana" target="_blank">Kibana.</a>
 		 <div class="license" ng-show="appinstall.ibpm == 'true'">
 		 	<br>
@@ -85,11 +68,17 @@
 		 </div>
 		 <a ng-show="appinstall.rea == 'true'" href="{{baseurl}}81/app/kibana" target="_blank">Kibana.</a><font color="black" ng-show="appinstall.rea == 'true'"> (demo / Fujitsu1)<br><br></font>
 		</div>
-		 <a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}49950/posthoc" target="_blank">E-mail.</a><br ng-show="appinstall.ibpm == 'true'"><br ng-show="appinstall.ibpm == 'true'">
-		 <a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}49950/ssofi/" target="_blank" >SSOFI ID Provider.</a><br ng-show="appinstall.ibpm == 'true'"><br ng-show="appinstall.ibpm == 'true'">
+		<div class="tools col-lg-2">
+		 <a ng-show="appinstall.alfresco == 'true'" href="{{baseurl}}8080/share/page" target="_blank">Alfresco.</a><font color="black" ng-show="appinstall.alfresco == 'true'"> (admin / Fujitsu1)<br><br></font>
+		 <a ng-show="appinstall.flowable == 'true'" href="{{baseurl}}8080/flowable-modeler" target="_blank">Flowable Modeler</a><font color="black" ng-show="appinstall.flowable == 'true'"> (admin / test)<br><br></font>
+	     <a ng-show="appinstall.flowable == 'true'" href="{{baseurl}}8080/flowable-task" target="_blank">Flowable Task</a><font color="black" ng-show="appinstall.flowable == 'true'"> (admin / test)<br><br></font>
+		 <a ng-show="appinstall.flowable == 'true'" href="{{baseurl}}8080/flowable-rest/service/management/engine" target="_blank">Flowable REST</a><font color="black" ng-show="appinstall.flowable == 'true'"> (kermit / kermit)<br><br></font>
+		 <a ng-show="appinstall.flowable == 'true'" href="{{baseurl}}8080/flowable-idm" target="_blank">Flowable IDM</a><font color="black" ng-show="appinstall.flowable == 'true'"> (admin / test)<br><br></font>
+		 <a ng-show="appinstall.flowable == 'true'" href="{{baseurl}}8080/flowable-admin" target="_blank">Flowable Admin</a><font color="black" ng-show="appinstall.flowable == 'true'"> (admin / test)<br><br></font>
+		 </div>
       </div>
    </div>
-   <hr>
+   <br>
    
 <!-- Section with tool URL's. -->   
    
@@ -99,6 +88,7 @@
          <div class="tools">
 			<a href="{{baseurl}}/appversions.html" target="_blank" >Application information.</a><br><br>
 			<a ng-show="appinstall.es == 'true'" href="{{baseurl}}9100" target="_blank">Elastic Search.</a><br><br>
+			<a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}49950/posthoc" target="_blank">E-mail.</a><br ng-show="appinstall.ibpm == 'true'"><br ng-show="appinstall.ibpm == 'true'">
          </div>
 		 <div>
 			<a ng-show="appinstall.ibpm == 'true'" href="{{baseurl}}49950/aa/perfTest.html" target="_blank" >Performance test.</a><br ng-show="appinstall.ibpm == 'true'"><br ng-show="appinstall.ibpm == 'true'">

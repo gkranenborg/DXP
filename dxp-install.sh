@@ -15,7 +15,7 @@ Init()
 # *                                                                                    *
 # **************************************************************************************
 
-	VERSION="13.4"
+	VERSION="14.0"
 	INSTALL_FILE_DIR=`pwd`
 	CONFIG_FILE=$INSTALL_FILE_DIR/dxp.config
 	SOFTWARE=$INSTALL_FILE_DIR/software
@@ -79,7 +79,12 @@ Welcome()
 	Continue
 	case "$APPLICATION" in
 	IBPM)
-		BANNER="Interstage BPM (DXP Enterprise)"
+		if [ "$COMBOINSTALL" = "true" ]
+		then
+			 BANNER="IBPM + Flowable (DXP Enterprise +)"
+		else 
+			BANNER="Interstage BPM (DXP Enterprise)"
+		fi
 	;;
 	FLOWABLE)
 		BANNER="Flowable (DXP Community)"
@@ -100,18 +105,26 @@ Welcome()
 	if [ "$INPUT" = "n" ]
 	then
 		echo ""
-		echo -n " Which application do you want to install ? IBPM (I), Flowable (F) or REA (R) ? : "
+		echo -n " Which application do you want to install ? IBPM (I), Flowable (F), REA (R) or IBPM + Flowable (C) ? : "
 		read INPUT
 		OLDAPP=$APPLICATION
+		OLDCOMBO=$COMBOINSTALL
 		case "$INPUT" in
 			I)
 				APPLICATION="IBPM"
+				COMBOINSTALL="false"
 			;;
 			F)
 				APPLICATION="FLOWABLE"
+				COMBOINSTALL="false"
 			;;
 			R)
 				APPLICATION="REA"
+				COMBOINSTALL="false"
+			;;
+			C)
+				APPLICATION="IBPM"
+				COMBOINSTALL="true"
 			;;
 			*)
 				clear
@@ -121,6 +134,7 @@ Welcome()
 				Welcome
 		esac
 		sed -i -e "s/APPLICATION=\"$OLDAPP\"/APPLICATION=\"$APPLICATION\"/g" $CONFIG_FILE
+		sed -i -e "s/COMBOINSTALL=\"$OLDCOMBO\"/COMBOINSTALL=\"$COMBOINSTALL\"/g" $CONFIG_FILE
 	fi
 	echo ""
 	echo -n " The new VM version is set to be : $VMVERSION. Is this correct (y/n) ? [y] : "
@@ -267,7 +281,7 @@ Check_install_files()
 	if [ "$APPLICATION" = "IBPM" ]
 	then
 		Check_file $SOFTWARE/jboss-eap-$VJBOSS.zip JBOSS
-		Check_file $SOFTWARE/I-BPM$VIBPM-EnterpriseEdition-CD_IMAGE.zip IBPM
+		Check_file $SOFTWARE/I-BPM$VIBPM-EnterpriseEdition-CD_IMAGE*.zip IBPM
 		Check_file $SOFTWARE/Patch/BZ-1358913.zip JBOSSBZ
 		Check_file $BAL_DIR/BPMActionLibrary.jar TMP
 		Check_file $BAL_DIR/twitter4j-core-4.0.4.jar TMP
@@ -379,7 +393,12 @@ Change_os_settings()
 		then
 			case "$APPLICATION" in
 				IBPM)
-					NEWHOSTNAME="$IBPMHOSTNAME"
+					if [ "$COMBOINSTALL" = "true" ]
+					then
+						NEWHOSTNAME="$IBPMFLOWHOSTNAME"
+					else
+						NEWHOSTNAME="$IBPMHOSTNAME"
+					fi
 				;;
 				FLOWABLE)
 					NEWHOSTNAME="$FLOWHOSTNAME"
@@ -466,13 +485,18 @@ Install_scripts()
 
 	case "$APPLICATION" in
 		IBPM)
-			APPNAME="(Enterprise)"
+			if [ "$COMBOINSTALL" = "true" ]
+			then
+				APPNAME="(Enterprise+)"
+			else
+				APPNAME="(Enterprise) "
+			fi
 		;;
 		FLOWABLE)
-			APPNAME="(Community) "
+			APPNAME="(Community)  "
 		;;
 		REA)
-			APPNAME="( Lite )    "
+			APPNAME="( Lite )     "
 		;;
 	esac
 	echo "#!/bin/bash" > /etc/rc.d/rc.local
@@ -484,7 +508,7 @@ Install_scripts()
 	echo "" >> /etc/rc.d/rc.local
 	echo "echo    \" ****************************************************************************** \"      >> /etc/issue" >> /etc/rc.d/rc.local
 	echo "echo    \" |                                                                            | \"      >> /etc/issue" >> /etc/rc.d/rc.local
-	echo "echo    \" |                        Fujitsu DXP ${APPNAME} demo VM                    | \"      >> /etc/issue" >> /etc/rc.d/rc.local
+	echo "echo    \" |                        Fujitsu DXP ${APPNAME} demo VM                   | \"      >> /etc/issue" >> /etc/rc.d/rc.local
 	echo "echo    \" |                                                                            | \"      >> /etc/issue" >> /etc/rc.d/rc.local
 	echo "echo -n \" |                         Hostname : \"                                       >> /etc/issue" >> /etc/rc.d/rc.local
 	echo "echo    \"\${HOSTNAME}\${DUMMY:0:\`expr 31 - \${#HOSTNAME}\`}         | \"                         >> /etc/issue" >> /etc/rc.d/rc.local
@@ -600,7 +624,7 @@ Check_tools()
 		yum -y install epel-release >$ILOG 2>>$ERROR
 		yum -y install nginx >$ILOG 2>>$ERROR
 	fi
-	yum -y update >$ILOG 2>&1
+#	yum -y update >$ILOG 2>&1
 	ret=$?
 	if [ $ret -ne 0 ]
 	then
@@ -1212,6 +1236,11 @@ Install_flowable()
 		echo " Errorcode : $ret"
 		Abort_install
 	else
+		if [ "$COMBOINSTALL" = "true" ]
+		then
+			unset EDBHOME PGDATABASE PGPORT PGLOCALEDIR PGDATA
+		fi
+		cd $INSTALL_FILE_DIR
 		su postgres -c '/usr/pgsql*/bin/psql -f misc/initflowable.sql' >$ILOG 2>>$ERROR
 		su postgres -c '/usr/pgsql*/bin/psql -U flowable -d flowable -f /opt/flowable-*/database/create/all/flowable.postgres.all.create.sql' >$ILOG 2>>$ERROR
 		ret=$?
@@ -1249,6 +1278,10 @@ Install_tomcat()
 		rm -rf $INSTALL_LOG_DIR/apache.tar
 		echo "JAVA_OPTS=\"-XX:+CMSClassUnloadingEnabled -XX:MaxPermSize=256M\"" >>$TARGET_DIR/apache-tomcat-$VAPACHE/bin/setenv.sh
 		cp $INSTALL_FILE_DIR/misc/post*jar $TARGET_DIR/apa*/lib >$ILOG 2>>$ERROR
+		if [ "$COMBOINSTALL" = "true" ]
+		then
+			sed -i -e 's/8009/9009/g' $TARGET_DIR/apache*/conf/server.xml >$ILOG 2>>$ERROR
+		fi
 		touch $INSTALL_LOG_DIR/tomcat.log
 	fi
 }
@@ -1283,7 +1316,7 @@ Install_flowable_wars()
 				jar xvf $TARGET_DIR/flow*/wars/flowable-admin.war -x WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				sed -i -e 's/datasource.driver=org.h2.Driver/#datasource.driver=org.h2.Driver/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				sed -i -e 's/datasource.url=jdbc:h2:mem:flowable;DB_CLOSE_DELAY=-1/#datasource.url=jdbc:h2:mem:flowable;DB_CLOSE_DELAY=-1/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
-				sed -i -e 's/localhost/flowabledemo/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
+				sed -i -e "s/localhost/$NEWHOSTNAME/g" $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				echo "datasource.jndi.name=jdbc/flowable-admin" >>$INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties
 				echo "datasource.jndi.resourceRef=true" >>$INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties
 				jar uvf $TARGET_DIR/apache-tomcat-*/webapps/flowable-admin.war WEB-INF >$ILOG 2>>$ERROR
@@ -1297,7 +1330,7 @@ Install_flowable_wars()
 				jar xvf $TARGET_DIR/flow*/wars/flowable-idm.war -x WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				sed -i -e 's/datasource.driver=org.h2.Driver/#datasource.driver=org.h2.Driver/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				sed -i -e 's/datasource.url=jdbc:h2:mem:flowable;DB_CLOSE_DELAY=-1/#datasource.url=jdbc:h2:mem:flowable;DB_CLOSE_DELAY=-1/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
-				sed -i -e 's/localhost/flowabledemo/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
+				sed -i -e "s/localhost/$NEWHOSTNAME/g" $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				echo "datasource.jndi.name=jdbc/flowable-idm" >>$INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties
 				echo "datasource.jndi.resourceRef=true" >>$INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties
 				jar uvf $TARGET_DIR/apache-tomcat-*/webapps/flowable-idm.war WEB-INF >$ILOG 2>>$ERROR
@@ -1311,7 +1344,7 @@ Install_flowable_wars()
 				jar xvf $TARGET_DIR/flow*/wars/flowable-modeler.war -x WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				sed -i -e 's/datasource.driver=org.h2.Driver/#datasource.driver=org.h2.Driver/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				sed -i -e 's/datasource.url=jdbc:h2:mem:flowable;DB_CLOSE_DELAY=-1/#datasource.url=jdbc:h2:mem:flowable;DB_CLOSE_DELAY=-1/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
-				sed -i -e 's/localhost/flowabledemo/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
+				sed -i -e "s/localhost/$NEWHOSTNAME/g" $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				echo "datasource.jndi.name=jdbc/flowable-modeler" >>$INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties
 				echo "datasource.jndi.resourceRef=true" >>$INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties
 				jar uvf $TARGET_DIR/apache-tomcat-*/webapps/flowable-modeler.war WEB-INF >$ILOG 2>>$ERROR
@@ -1325,8 +1358,8 @@ Install_flowable_wars()
 				jar xvf $TARGET_DIR/flow*/wars/flowable-task.war -x WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				sed -i -e 's/datasource.driver=org.h2.Driver/#datasource.driver=org.h2.Driver/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				sed -i -e 's/datasource.url=jdbc:h2:mem:flowable;DB_CLOSE_DELAY=-1/#datasource.url=jdbc:h2:mem:flowable;DB_CLOSE_DELAY=-1/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
-				sed -i -e 's/localhost/flowabledemo/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
-				sed -i -e 's/#email.host=flowabledemo/email.host=flowabledemo/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
+				sed -i -e "s/localhost/$NEWHOSTNAME/g" $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
+				sed -i -e "s/#email.host=flowabledemo/email.host=$NEWHOSTNAME/g" $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				sed -i -e 's/#email.port=1025/email.port=2525/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				sed -i -e 's/#email.useCredentials=false/email.useCredentials=false/g' $INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties >$ILOG 2>>$ERROR
 				echo "datasource.jndi.name=jdbc/flowable-task" >>$INSTALL_LOG_DIR/WEB-INF/classes/META-INF/flowable-ui-app/flowable-ui-app.properties
@@ -2019,15 +2052,22 @@ Create_appversion()
 				ALFRESCOVERSION="not installed"
 				ALFRESCOINSTALLED="false"
 			fi
-			FLOWABLEVERSION="not installed"
-			TOMCATVERSION="not installed"
+			if [ "$COMBOINSTALL" = "true" ]
+			then
+				FLOWABLEVERSION="$VFLOWABLE"
+				TOMCATVERSION="$VAPACHE"
+				FLOWABLEINSTALLED="true"
+			else
+				FLOWABLEVERSION="not installed"
+				TOMCATVERSION="not installed"
+				FLOWABLEINSTALLED="false"
+			fi
 			REAVERSION="not installed"
 			DBINSTALLED="true"
 			ESINSTALLED="true"
 			KIBANAINSTALLED="true"
 			REAINSTALLED="false"
 			NGINXINSTALLED="false"
-			FLOWABLEINSTALLED="false"
 			NGINXVERSION="not installed"
 		;;
 		FLOWABLE)
@@ -2039,7 +2079,7 @@ Create_appversion()
 			SSOFIVERSION="not installed"
 			ALFRESCOVERSION="not installed"
 			FLOWABLEVERSION="$VFLOWABLE"
-			TOMCATVERSION="not installed"
+			TOMCATVERSION="$VAPACHE"
 			REAVERSION="not installed"
 			DBINSTALLED="true"
 			JBOSSINSTALLED="false"
@@ -2051,6 +2091,7 @@ Create_appversion()
 			ALFRESCOINSTALLED="false"
 			FLOWABLEINSTALLED="true"
 			NGINXVERSION="not installed"
+			BALVERSION="not installed"
 		;;
 		REA)
 			DBVERSION="not installed"
@@ -2072,6 +2113,7 @@ Create_appversion()
 			NGINXINSTALLED="true"
 			ALFRESCOINSTALLED="false"
 			FLOWABLEINSTALLED="false"
+			BALVERSION="not installed"
 			nginx -v 2>$INSTALL_LOG_DIR/nginxversion
 			NGINXVERSION=`cat $INSTALL_LOG_DIR/nginxversion|cut -f2 -d"/"`
 		;;
@@ -3203,6 +3245,39 @@ Main()
 		then
 			sed -i -e "s/polling_in_seconds: 30/polling_in_seconds: 0/g" $TARGET_DIR/AgileAdapterData/Analytics.properties
 		fi
+		if [ "$COMBOINSTALL" = "true" ]
+		then
+			APPLICATION="FLOWABLE"
+			Check_install_files
+			if [ ! -f $INSTALL_LOG_DIR/postgresinstalled.log ]
+			then
+				Paint_screen Completed Completed Completed Running Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				Install_postgres
+			fi
+			if [ ! -f $INSTALL_LOG_DIR/flowable.log ]
+			then
+				Paint_screen Completed Completed Completed Completed Running Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				Install_flowable
+			fi
+			if [ ! -f $INSTALL_LOG_DIR/tomcat.log ]
+			then
+				Paint_screen Completed Completed Completed Completed Completed Running Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				Install_tomcat
+			fi
+			if [ ! -f $INSTALL_LOG_DIR/flowablewars.log ]
+			then
+				Paint_screen Completed Completed Completed Completed Completed Completed Running Waiting Waiting Waiting $SCLEARLOG Waiting
+				Install_flowable_wars
+			fi
+			if [ ! -f $INSTALL_LOG_DIR/tomcatstart.log ]
+			then
+				Paint_screen Completed Completed Completed Completed Completed Completed Completed Running Waiting Waiting $SCLEARLOG Waiting
+				Start_tomcat
+			fi
+			APPLICATION="IBPM"
+		fi
+		
+		
 		;;
 		FLOWABLE)
 			if [ ! -f $INSTALL_LOG_DIR/postgresinstalled.log ]

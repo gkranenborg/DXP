@@ -20,9 +20,10 @@
  	<nav class="navbar navbar-inverse">
 	  <div class="container-fluid">
 	    <div class="navbar-header">
-	      <a ng-show="appinstall.ibpm == 'true'" class="navbar-brand">Fujitsu DXP (Enterprise)</a>
+	      <a ng-show="appinstall.ibpm == 'true' && appinstall.flowable == 'false'" class="navbar-brand">Fujitsu DXP (Enterprise)</a>
+	      <a ng-show="appinstall.ibpm == 'true' && appinstall.flowable == 'true'" class="navbar-brand">Fujitsu DXP (Enterprise+)</a>
 		  <a ng-show="appinstall.rea == 'true'" class="navbar-brand">Fujitsu DXP (Lite)</a>
-		  <a ng-show="appinstall.flowable == 'true'" class="navbar-brand">Fujitsu DXP (Community)</a>
+		  <a ng-show="appinstall.flowable == 'true' && appinstall.ibpm == 'false'" class="navbar-brand">Fujitsu DXP (Community)</a>
 	      <div class="navtext">
 	         <font color="Gainsboro" ng-show="appinstall.database == 'true'">Database : <div class="roundbutton {{getclassname(system.database)}}"></div></font>
 	         <font color="Gainsboro" ng-show="appinstall.jboss == 'true'">JBoss6.4.9 : <div class="roundbutton {{getclassname(system.jbossibpm)}}"></div></font>
