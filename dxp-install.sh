@@ -624,7 +624,7 @@ Check_tools()
 		yum -y install epel-release >$ILOG 2>>$ERROR
 		yum -y install nginx >$ILOG 2>>$ERROR
 	fi
-#	yum -y update >$ILOG 2>&1
+	yum -y update >$ILOG 2>&1
 	ret=$?
 	if [ $ret -ne 0 ]
 	then
