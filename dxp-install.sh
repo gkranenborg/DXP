@@ -15,7 +15,7 @@ Init()
 # *                                                                                    *
 # **************************************************************************************
 
-	VERSION="14.0"
+	VERSION="14.1"
 	INSTALL_FILE_DIR=`pwd`
 	CONFIG_FILE=$INSTALL_FILE_DIR/dxp.config
 	SOFTWARE=$INSTALL_FILE_DIR/software
@@ -24,8 +24,8 @@ Init()
 	FCLASSES=$INSTALL_FILE_DIR/flowable-classes
 	BAL_DIR=$INSTALL_FILE_DIR/bal-jars
 	MISC_DIR=$INSTALL_FILE_DIR/misc
-	APPVERSIONFILE=/var/www/html/scripts/appversions.json
-	APPINSTALLFILE=/var/www/html/scripts/appinstall.json
+	APPVERSIONFILE=/var/www/html/assets/appversions.json
+	APPINSTALLFILE=/var/www/html/assets/appinstall.json
 	
 	if [ ! -f $CONFIG_FILE ]
 	then
@@ -240,16 +240,8 @@ Check_install_files()
 # **** General checks ****	
 
 	Check_file $SOFTWARE/jdk-8u$VJDK8-linux-x64.rpm JDK8
-	Check_file $WEB_DIR/index.html TMP
-	Check_file $WEB_DIR/appversions.html TMP
-	Check_file $WEB_DIR/scripts/angular.min.js TMP
-	Check_file $WEB_DIR/scripts/jquery.min.js TMP
-	Check_file $WEB_DIR/scripts/appcontroller.js TMP
-	Check_file $WEB_DIR/scripts/STATUSresult.json TMP
+	Check_file $WEB_DIR/web.zip TMP
 	Check_file $WEB_DIR/scripts/systemstatus TMP
-	Check_file $WEB_DIR/scripts/version.json TMP
-	Check_file $WEB_DIR/css/bootstrap.css TMP
-	Check_file $WEB_DIR/css/main.css TMP
 	Check_file $INSTALL_FILE_DIR/options/chat/app.js TMP
 	Check_file $MISC_DIR/README.txt README
 	
@@ -257,7 +249,6 @@ Check_install_files()
 	
 	if [ "$APPLICATION" != "FLOWABLE" ]
 	then
-		Check_file $SOFTWARE/kibana-$VELK-x86_64.rpm KIBANA
 		Check_file $SOFTWARE/elasticsearch-$VELK.rpm ELASTIC
 		Check_file $SOFTWARE/elasticsearch-head-master.zip ESHEAD
 	else
@@ -607,6 +598,16 @@ Check_tools()
 			chkconfig --add telnet 2>>$ERROR
 			chkconfig --level 3 telnet on 2>>$ERROR
 			/usr/bin/vmware-toolbox-cmd timesync enable >$ILOG 2>>$ERROR
+		fi
+	fi
+	if ! type bzip2 >$ILOG 2>&1
+	then
+		yum -y install bzip2 >$ILOG 2>>$ERROR
+		ret=$?
+		if [ $ret -ne 0 ]
+		then
+			Screen_output 0 "bzip2 failed to get installed !!"
+			Continue
 		fi
 	fi
 	if [ "$IBPMDB" = "oracle" -a "$APPLICATION" = "IBPM" ]
@@ -1371,28 +1372,31 @@ Install_flowable_wars()
 		esac
 	cp $INSTALL_FILE_DIR/flowable-classes/flowable-*.xml $APADIR/Catalina/localhost
 	done
-	if [ ! -f $INSTALL_LOG_DIR/phoc.log ]
+	if [ "$COMBOINSTALL" = "false" ]
 	then
-		Check_war $INSTALL_FILE_DIR/options/posthoc.war WEB-INF/DataLocation.properties
-		if [ "$WARCONTENT" = "true" ]
-		then
-			Modify_posthoc
-			cp $INSTALL_FILE_DIR/options/posthoc.war $TARGET_DIR/apa*/webapps >$ILOG 2>>$ERROR
-			ret=$?
-			if [ $ret -ne 0 ]
+	  if [ ! -f $INSTALL_LOG_DIR/phoc.log ]
+	  then
+	  		Check_war $INSTALL_FILE_DIR/options/posthoc.war WEB-INF/DataLocation.properties
+			if [ "$WARCONTENT" = "true" ]
 			then
-				Screen_output 0 "The posthoc.war file failed to copy !!"
-				echo " Errorcode : $ret"
+				Modify_posthoc
+				cp $INSTALL_FILE_DIR/options/posthoc.war $TARGET_DIR/apa*/webapps >$ILOG 2>>$ERROR
+				ret=$?
+				if [ $ret -ne 0 ]
+				then
+					Screen_output 0 "The posthoc.war file failed to copy !!"
+					echo " Errorcode : $ret"
+					echo ""
+					Continue
+				else
+					touch $INSTALL_LOG_DIR/phoc.log
+					rm -rf $INSTALL_LOG_DIR/posthoc.war
+				fi
+			else
+				Screen_output 0 "The posthoc.war file does not contain a DataLocation.properties file !!"
 				echo ""
 				Continue
-			else
-				touch $INSTALL_LOG_DIR/phoc.log
-				rm -rf $INSTALL_LOG_DIR/posthoc.war
 			fi
-		else
-			Screen_output 0 "The posthoc.war file does not contain a DataLocation.properties file !!"
-			echo ""
-			Continue
 		fi
 	fi
 	touch $INSTALL_LOG_DIR/flowablewars.log
@@ -1408,9 +1412,9 @@ Install_webpage()
 # **************************************************************************************
 	echo "*** Installing webpage ***" >>$ERROR
 	systemctl enable httpd >$ILOG 2>&1
-	cp $INSTALL_FILE_DIR/web/*.htm* /var/www/html 2>>$ERROR
-	cp -r $INSTALL_FILE_DIR/web/css /var/www/html 2>>$ERROR
+	unzip $INSTALL_FILE_DIR/web/web.zip -d /var/www/html >$ILOG 2>>$ERROR
 	cp -r $INSTALL_FILE_DIR/web/scripts /var/www/html 2>>$ERROR
+	mkdir /var/www/html/assets >$ILOG 2>>$ERROR
 	cp $INSTALL_FILE_DIR/misc/README.txt /root/README.txt 2>>$ERROR
 	sed -i -e "s/version : /version : $VMVERSION/g" /root/README.txt 2>>$ERROR
 	chmod 755 /var/www/html/scripts/systemstatus 2>>$ERROR
@@ -1650,83 +1654,6 @@ Install_elastic()
 	fi
 }
 
-Install_kibana()
-{
-# **************************************************************************************
-# *                                                                                    *
-# * This function will install Kibana.                                                 *
-# *                                                                                    *
-# **************************************************************************************
-	echo "*** Installing Kibana ***" >>$ERROR
-	rpm -i $KIBANAFILE >$ILOG 2>>$ERROR
-	ret=$?
-	if [ $ret -ne 0 ]
-	then
-		Screen_output 0 "Kibana failed to install !!"
-		echo " Errorcode : $ret"
-		Continue
-	else
-		sed -i -e "s/#elasticsearch.url: \"http:\/\/localhost:9200\"/elasticsearch.url: \"http:\/\/$NEWHOSTNAME:9200\"/g" /etc/kibana/kibana.yml 2>>$ERROR
-		sed -i -e "s/#server.host: \"localhost\"/server.host: \"$NEWHOSTNAME\"/g" /etc/kibana/kibana.yml 2>>$ERROR
-		sed -i -e '/#!\/bin\// a # chkconfig: 3 85 04' /etc/rc.d/init.d/kibana 2>>$ERROR
-		if [ "$APPLICATION" = "IBPM" ]
-		then
-			sed -i -e 's/#server.basePath: ""/server.basePath: "\/aa\/kibana"/g' /etc/kibana/kibana.yml
-		fi
-		chkconfig --add kibana >$ILOG 2>>$ERROR
-		chkconfig --level 3 kibana on >$ILOG 2>&1
-		service kibana start >$ILOG 2>>$ERROR
-		touch $INSTALL_LOG_DIR/kibana.log
-	fi
-}
-
-Install_kibanaplugin()
-{
-# **************************************************************************************
-# *                                                                                    *
-# * This function will install several Kibana plugins                                  *
-# *                                                                                    *
-# **************************************************************************************
-	echo "*** Installing Kibana plugins ***" >>$ERROR
-	if [ ! -f $INSTALL_LOG_DIR/trafficlight.log ]
-	then
-		Clone_plugin https://github.com/sbeyn/kibana-plugin-traffic-sg.git traffic-sg
-	fi
-	if [ ! -f $INSTALL_LOG_DIR/gaugeplugin.log ]
-	then
-		Clone_plugin https://github.com/sbeyn/kibana-plugin-gauge-sg.git gauge-sg
-	fi
-	if [ "$APPLICATION" = "REA" ]
-	then
-		if [ ! -f $INSTALL_LOG_DIR/lineplugin.log ]
-		then
-			Clone_plugin https://github.com/sbeyn/kibana-plugin-line-sg.git line-sg
-		fi
-	fi
-	touch $INSTALL_LOG_DIR/kibanaplugin.log
-}
-
-Clone_plugin()
-{
-# **************************************************************************************
-# *                                                                                    *
-# * This function will install the Kibana Plugins using git clone                      *
-# *                                                                                    *
-# **************************************************************************************
-		cd /usr/share/kibana/plugins
-		pname=`echo $2|cut -f1 -d"-"`
-		git clone $1 $2 >$ILOG 2>>$ERROR
-		ret=$?
-		if [ $ret -ne 0 ]
-		then
-			Screen_output 0 "The Kibana $pname plugin failed to install !!"
-			Continue
-		else
-			cd $INSTALL_FILE_DIR
-			touch $INSTALL_LOG_DIR/$pnameplugin.log
-		fi
-}
-
 Install_esgui()
 {
 # **************************************************************************************
@@ -1744,15 +1671,15 @@ Install_esgui()
 	else
 		cd $TARGET_DIR/elasticsearch-head-master
 		sed -i -e "s/localhost:9100/$NEWHOSTNAME:9100/g" $TARGET_DIR/elasticsearch-head-master/proxy/index.js
-		PATH=$PATH:/usr/share/kibana/node/bin
 		npm install >$ILOG 2>>$ERROR
 		cd $TARGET_DIR
+		NODEDIR=`dirname $TARGET_DIR/node*/bin/node`
 		echo "#!/bin/sh" > /etc/rc.d/init.d/eshead
 		echo "#" >> /etc/rc.d/init.d/eshead
 		echo "# chkconfig: 3 75 04" >> /etc/rc.d/init.d/eshead
 		echo "#" >> /etc/rc.d/init.d/eshead
-		echo "PATH=/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin:/usr/share/kibana/node/bin" >> /etc/rc.d/init.d/eshead
-		echo "cd /$TARGET_DIR/elasticsearch-head-master" >> /etc/rc.d/init.d/eshead
+		echo "PATH=$NODEDIR:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin" >> /etc/rc.d/init.d/eshead
+		echo "cd $TARGET_DIR/elasticsearch-head-master" >> /etc/rc.d/init.d/eshead
 		echo "nohup npm run start &" >> /etc/rc.d/init.d/eshead
 		chmod 755 /etc/rc.d/init.d/eshead
 		chkconfig --add eshead >$ILOG 2>>$ERROR
@@ -1765,7 +1692,7 @@ Deploy_war()
 {
 # **************************************************************************************
 # *                                                                                    *
-# * This function will deploys war files using the JBoss cli script                    *
+# * This function will deploy war files using the JBoss cli script                     *
 # *                                                                                    *
 # **************************************************************************************
 	warname=`echo $1|rev|cut -f1 -d"/"|rev`
@@ -1862,8 +1789,6 @@ Install_rea()
 	fi
 	cp $INSTALL_FILE_DIR/rea/nginx.conf /etc/nginx >$ILOG 2>>$ERROR
 	cp $INSTALL_FILE_DIR/rea/kibana.conf /etc/nginx/conf.d >$ILOG 2>>$ERROR
-	sed -i -e "s/server_name example.com/server_name $NEWHOSTNAME/g" /etc/nginx/conf.d/kibana.conf >$ILOG 2>>$ERROR
-	sed -i -e "s/localhost/$NEWHOSTNAME/g" /etc/nginx/conf.d/kibana.conf >$ILOG 2>>$ERROR
 	htpasswd -bc /etc/nginx/htpasswd.users demo Fujitsu1 >$ILOG 2>>$ERROR
 	if [ ! -f $INSTALL_LOG_DIR/reaui ]
 	then
@@ -1885,7 +1810,6 @@ Install_rea()
 		Screen_output 0 "The nginx Service is not running !!"
 		Continue
 	fi
-	PATH=/usr/share/kibana/node/bin:$PATH
 	export PATH
 	if [ ! -f $INSTALL_LOG_DIR/pm2 ]
 	then
@@ -1952,20 +1876,14 @@ Install_chat()
 	fi
 	if [ -f $INSTALL_FILE_DIR/software/node*xz ]
 	then
-		if [ ! -f /usr/share/kibana/node/bin/node ]
-		then
-			gunzip -fc $INSTALL_FILE_DIR/software/node*xz >$INSTALL_LOG_DIR/node.tar 2>>$ERROR
-			tar xvf $INSTALL_LOG_DIR/node.tar -C $INSTALL_LOG_DIR > $ILOG 2>>$ERROR
-			mkdir $TARGET_DIR/node$VNODE 2>>$ERROR
-			mv $INSTALL_LOG_DIR/node*x64/* $TARGET_DIR/node$VNODE 2>>$ERROR
-			sed -i -e "s|REPLACE|$TARGET_DIR/node$VNODE|g" /etc/rc.d/init.d/chat.sh 2>>$ERROR
-			PATH=$PATH:$TARGET_DIR/node$VNODE/bin 2>>$ERROR
-			rm -rf $INSTALL_LOG_DIR/node.tar
-			rm -rf $INSTALL_LOG_DIR/node*x64
-		else
-			sed -i -e "s|REPLACE|/usr/share/kibana/node|g" /etc/rc.d/init.d/chat.sh 2>>$ERROR
-			PATH=$PATH:/usr/share/kibana/node/bin 2>>$ERROR
-		fi
+		gunzip -fc $INSTALL_FILE_DIR/software/node*xz >$INSTALL_LOG_DIR/node.tar 2>>$ERROR
+		tar xvf $INSTALL_LOG_DIR/node.tar -C $INSTALL_LOG_DIR > $ILOG 2>>$ERROR
+		mkdir $TARGET_DIR/node$VNODE 2>>$ERROR
+		mv $INSTALL_LOG_DIR/node*x64/* $TARGET_DIR/node$VNODE 2>>$ERROR
+		sed -i -e "s|REPLACE|$TARGET_DIR/node$VNODE|g" /etc/rc.d/init.d/chat.sh 2>>$ERROR
+		PATH=$PATH:$TARGET_DIR/node$VNODE/bin 2>>$ERROR
+		rm -rf $INSTALL_LOG_DIR/node.tar
+		rm -rf $INSTALL_LOG_DIR/node*x64
 		chmod 755 /etc/rc.d/init.d/chat.sh 2>>$ERROR
 		chkconfig --add chat.sh 2>>$ERROR
 		chkconfig --level 3 chat.sh on 2>>$ERROR
@@ -2065,7 +1983,6 @@ Create_appversion()
 			REAVERSION="not installed"
 			DBINSTALLED="true"
 			ESINSTALLED="true"
-			KIBANAINSTALLED="true"
 			REAINSTALLED="false"
 			NGINXINSTALLED="false"
 			NGINXVERSION="not installed"
@@ -2085,7 +2002,6 @@ Create_appversion()
 			JBOSSINSTALLED="false"
 			IBPMINSTALLED="false"
 			ESINSTALLED="false"
-			KIBANAINSTALLED="false"
 			REAINSTALLED="false"
 			NGINXINSTALLED="false"
 			ALFRESCOINSTALLED="false"
@@ -2108,7 +2024,6 @@ Create_appversion()
 			JBOSSINSTALLED="false"
 			IBPMINSTALLED="false"
 			ESINSTALLED="true"
-			KIBANAINSTALLED="true"
 			REAINSTALLED="true"
 			NGINXINSTALLED="true"
 			ALFRESCOINSTALLED="false"
@@ -2118,8 +2033,8 @@ Create_appversion()
 			NGINXVERSION=`cat $INSTALL_LOG_DIR/nginxversion|cut -f2 -d"/"`
 		;;
 	esac
-	echo "{\"installdate\":\"$INSTALLDATE\",\"script\":\"$VERSION\",\"vmversion\":\"$VMVERSION\",\"osversion\":\"$OSRELEASE\",\"jdk8\":\"$VJDK8\",\"database\":\"$DBVERSION\",\"jboss\":\"$JBOSS_VERSION\",\"ibpm\":\"$IBPM_VERSION\",\"es\":\"$VELK\",\"kibana\":\"$VELK\",\"chat\":\"$CHATVERSION\",\"aa\":\"$AAVERSION\",\"email\":\"$MAILVERSION\",\"ssofi\":\"$SSOFIVERSION\",\"ballib\":\"$BALVERSION\",\"alfresco\":\"$ALFRESCOVERSION\",\"flowable\":\"$FLOWABLEVERSION\",\"tomcat\":\"$TOMCATVERSION\",\"rea\":\"$REAVERSION\",\"nginx\":\"$NGINXVERSION\"}" >$APPVERSIONFILE
-	echo "{\"database\":\"$DBINSTALLED\",\"jboss\":\"$JBOSSINSTALLED\",\"ibpm\":\"$IBPMINSTALLED\",\"es\":\"$ESINSTALLED\",\"kibana\":\"$KIBANAINSTALLED\",\"rea\":\"$REAINSTALLED\",\"nginx\":\"$NGINXINSTALLED\",\"alfresco\":\"$ALFRESCOINSTALLED\",\"flowable\":\"$FLOWABLEINSTALLED\"}" >$APPINSTALLFILE
+	echo "{\"installdate\":\"$INSTALLDATE\",\"script\":\"$VERSION\",\"vmversion\":\"$VMVERSION\",\"osversion\":\"$OSRELEASE\",\"jdk8\":\"$VJDK8\",\"database\":\"$DBVERSION\",\"jboss\":\"$JBOSS_VERSION\",\"ibpm\":\"$IBPM_VERSION\",\"es\":\"$VELK\",\"chat\":\"$CHATVERSION\",\"aa\":\"$AAVERSION\",\"email\":\"$MAILVERSION\",\"ssofi\":\"$SSOFIVERSION\",\"ballib\":\"$BALVERSION\",\"alfresco\":\"$ALFRESCOVERSION\",\"flowable\":\"$FLOWABLEVERSION\",\"tomcat\":\"$TOMCATVERSION\",\"rea\":\"$REAVERSION\",\"nginx\":\"$NGINXVERSION\"}" >$APPVERSIONFILE
+	echo "{\"database\":\"$DBINSTALLED\",\"jboss\":\"$JBOSSINSTALLED\",\"ibpm\":\"$IBPMINSTALLED\",\"es\":\"$ESINSTALLED\",\"rea\":\"$REAINSTALLED\",\"nginx\":\"$NGINXINSTALLED\",\"alfresco\":\"$ALFRESCOINSTALLED\",\"flowable\":\"$FLOWABLEINSTALLED\"}" >$APPINSTALLFILE
 }
 
 Cleanup_install()
@@ -2293,6 +2208,71 @@ Change_smtp()
 	fi
 }
 
+Install_dxpcommunity()
+{
+	if [ ! -f $INSTALL_LOG_DIR/postgresinstalled.log ]
+	then
+		sed -i -e 's/Installing Database ......................... Waiting/Installing Database ......................... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+		Install_postgres
+		sed -i -e 's/Installing Database ......................... Running/Installing Database ......................... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+	fi
+	if [ ! -f $INSTALL_LOG_DIR/flowable.log ]
+	then
+		sed -i -e 's/Installing Flowable ......................... Waiting/Installing Flowable ......................... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+		Install_flowable
+		sed -i -e 's/Installing Flowable ......................... Running/Installing Flowable ......................... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+	fi
+	if [ ! -f $INSTALL_LOG_DIR/tomcat.log ]
+	then
+		sed -i -e 's/Installing Tomcat ........................... Waiting/Installing Tomcat ........................... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+		Install_tomcat
+		sed -i -e 's/Installing Tomcat ........................... Running/Installing Tomcat ........................... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+	fi
+	if [ ! -f $INSTALL_LOG_DIR/flowablewars.log ]
+	then
+		sed -i -e 's/Installing war files for Flowable ........... Waiting/Installing war files for Flowable ........... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+		Install_flowable_wars
+		sed -i -e 's/Installing war files for Flowable ........... Running/Installing war files for Flowable ........... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+	fi
+	if [ ! -f $INSTALL_LOG_DIR/tomcatstart.log ]
+	then
+		sed -i -e 's/Starting Tomcat ............................. Waiting/Starting Tomcat ............................. Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+		Start_tomcat
+		sleep 120
+		sed -i -e 's/Starting Tomcat ............................. Running/Starting Tomcat ............................. Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+	fi
+}
+
+Install_es()
+{
+	if [ ! -f $INSTALL_LOG_DIR/elasticsearch.log ]
+	then
+		sed -i -e 's/Installing Elastic Search ................... Waiting/Installing Elastic Search ................... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+		Install_elastic
+		sed -i -e 's/Installing Elastic Search ................... Running/Installing Elastic Search ................... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+	fi
+	if [ ! -f $INSTALL_LOG_DIR/esgui.log ]
+	then
+		sed -i -e 's/Installing E.S. GUI ......................... Waiting/Installing E.S. GUI ......................... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+		Install_esgui
+		sed -i -e 's/Installing E.S. GUI ......................... Running/Installing E.S. GUI ......................... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+	fi
+}
+
 Screen_output()
 {
 # **************************************************************************************
@@ -2384,83 +2364,137 @@ Paint_screen()
 	clear
 	if [ ! -f $INSTALL_LOG_DIR/reboot.log ]
 	then
-		echo " *********************************************************************************************"
-		echo ""
-		echo " The pre-installation tasks are in progress."
-		echo ""
-		echo " *********************************************************************************************"
-		echo ""
-		echo ""
-		if [ "$ALFRESCO" = "true" ]
-		then
-			echo "	Checking system resources ................... $1"
-		fi
-		echo "	Checking existence of installation files .... $2"
-		echo "	Changing O.S. settings .......................$3"
-		echo "	Installing auto start scripts ................$4"
-		echo "	Resetting the root password ..................$5"
-		echo "	System reboot ................................$6"
+		cat $PREINSTSCREEN
 	else
 		case "$APPLICATION" in
 			IBPM)
-				BANNER="Interstage BPM (DXP Enterprise)"
-				Show_banner
-				echo "	Checking O.S Tools .......................... $1"
-				echo "	Installing JDK8 ............................. $2"
-				echo "	Installing VM web site ...................... $3"
-				echo "	Installing Database ......................... $4"
-				echo "	Installing JBoss ............................ $5"
-				echo "	Installing JBoss Patches .................... $6"
-				echo "	Starting JBoss .............................. $7"
-				echo "	Configuring JBoss ........................... $8"
-				echo "	Unzipping IBPM engine folder ................ $9"
-				echo "	Configuring IBPM pre-installation ........... ${10}"
-				echo "	Installing IBPM ............................. ${11}"
-				echo "	Installing BPM Action Library ............... ${12}"
-				echo "	Installing war files ........................ ${13}"
-				echo "	Installing Alfresco ......................... ${14}"
-				echo "	Installing Elastic Search ................... ${15}"
-				echo "	Installing Kibana ........................... ${16}"
-				echo "	Installing Kibana Plugins.................... ${17}"
-				echo "	Installing E.S. GUI ......................... ${18}"
-				echo "	Installing Chat ............................. ${19}"
-				echo "	Creating App. version files ................. ${20}"
-				echo "	Deleting Installation files ................. ${21}"
-				echo "	Final System reboot ..........................${22}"
+				if [ "$COMBOINSTALL" = "false" ]
+				then
+					BANNER="Interstage BPM (DXP Enterprise)"
+				else
+					BANNER="Interstage BPM (DXP Enterprise+)"
+				fi
 			;;
 			FLOWABLE)
 				BANNER="Flowable (DXP Community)"
-				Show_banner
-				echo "	Checking O.S Tools .......................... $1"
-				echo "	Installing JDK8 ............................. $2"
-				echo "	Installing VM web site ...................... $3"
-				echo "	Installing Database ......................... $4"
-				echo "	Installing Flowable ......................... $5"
-				echo "	Installing Tomcat ........................... $6"
-				echo "	Installing Flowable war files ............... $7"
-				echo "	Starting Tomcat ............................. $8"
-				echo "	Installing Chat ............................. $9"
-				echo "	Creating App. version files ................. ${10}"
-				echo "	Deleting Installation files ................. ${11}"
-				echo "	Final System reboot ..........................${12}"
 			;;
 			REA)
 				BANNER="REA (DXP Lite)"
-				Show_banner
-				echo "	Checking O.S Tools .......................... $1"
-				echo "	Installing JDK8 ............................. $2"
-				echo "	Installing VM web site ...................... $3"
-				echo "	Installing Elastic Search ................... $4"
-				echo "	Installing Kibana ........................... $5"
-				echo "	Installing Kibana Plugins.................... $6"
-				echo "	Installing E.S. GUI ......................... $7"
-				echo "	Installing REA .............................. $8"
-				echo "	Installing Chat ............................. $9"
-				echo "	Creating App. version files ................. ${10}"
-				echo "	Deleting Installation files ................. ${11}"
-				echo "	Final System reboot ..........................${12}"
 			;;
 		esac
+		Show_banner
+		cat $INSTSCREEN
+	fi
+}
+
+Create_screens()
+{
+	if [ ! -f $PREINSTSCREEN ]
+	then
+		echo " *********************************************************************************************" > $PREINSTSCREEN
+		echo "" >> $PREINSTSCREEN
+		echo " The pre-installation tasks are in progress.">> $PREINSTSCREEN
+		echo "">> $PREINSTSCREEN
+		echo " *********************************************************************************************">> $PREINSTSCREEN
+		echo "">> $PREINSTSCREEN
+		echo "">> $PREINSTSCREEN
+		if [ "$ALFRESCO" = "true" ]
+		then
+			echo "	Checking system resources ................... Waiting">> $PREINSTSCREEN
+		fi
+		echo "	Checking existence of installation files ..... Waiting">> $PREINSTSCREEN
+		echo "	Changing O.S. settings ....................... Waiting">> $PREINSTSCREEN
+		echo "	Installing auto start scripts ................ Waiting">> $PREINSTSCREEN
+		if [ "$DEMOVM" = "true" ]
+		then
+			echo "	Resetting the root password .................. Waiting">> $PREINSTSCREEN
+		else
+			echo "	Resetting the root password .................. Skipping">> $PREINSTSCREEN
+		fi
+		echo "	System reboot ................................ Waiting">> $PREINSTSCREEN
+	fi
+	if [ ! -f $INSTSCREEN ]
+	then
+		echo "	Checking O.S Tools .......................... Waiting" > $INSTSCREEN
+		echo "	Installing JDK8 ............................. Waiting" >> $INSTSCREEN
+		echo "	Installing VM web site ...................... Waiting" >> $INSTSCREEN
+		echo "	Installing Chat ............................. Waiting" >> $INSTSCREEN
+		case "$APPLICATION" in
+			IBPM)
+				echo "	Installing DXP Database ..................... Waiting" >> $INSTSCREEN
+				if [ "$INSTALLJBOSS" = "true" ]
+				then
+					echo "	Installing JBoss ............................ Waiting" >> $INSTSCREEN
+					echo "	Installing Patches for JBoss ................ Waiting" >> $INSTSCREEN
+					echo "	Starting JBoss .............................. Waiting" >> $INSTSCREEN
+					echo "	Configuring JBoss ........................... Waiting" >> $INSTSCREEN
+					if [ "$INSTALLIBPM" = "true" ]
+					then
+						echo "	Unzipping IBPM engine folder ................ Waiting" >> $INSTSCREEN
+						echo "	Configuring IBPM pre-installation ........... Waiting" >> $INSTSCREEN
+						echo "	Installing IBPM ............................. Waiting" >> $INSTSCREEN
+						echo "	Installing BPM Action Library ............... Waiting" >> $INSTSCREEN
+					else
+						echo "	Unzipping IBPM engine folder ................ Skipping" >> $INSTSCREEN
+						echo "	Configuring IBPM pre-installation ........... Skipping" >> $INSTSCREEN
+						echo "	Installing IBPM ............................. Skipping" >> $INSTSCREEN
+						echo "	Installing BPM Action Library ............... Skipping" >> $INSTSCREEN
+					fi
+					echo "	Installing war files ........................ Waiting" >> $INSTSCREEN
+				else
+					echo "	Installing JBoss ............................ Skipping" >> $INSTSCREEN
+					echo "	Installing JBoss Patches .................... Skipping" >> $INSTSCREEN
+					echo "	Starting JBoss .............................. Skipping" >> $INSTSCREEN
+					echo "	Configuring JBoss ........................... Skipping" >> $INSTSCREEN
+					echo "	Unzipping IBPM engine folder ................ Skipping" >> $INSTSCREEN
+					echo "	Configuring IBPM pre-installation ........... Skipping" >> $INSTSCREEN
+					echo "	Installing IBPM ............................. Skipping" >> $INSTSCREEN
+					echo "	Installing BPM Action Library ............... Skipping" >> $INSTSCREEN
+					echo "	Installing war files ........................ Skipping" >> $INSTSCREEN
+				fi
+				if [ "$ALFRESCO" = "true" ]
+				then
+					echo "	Installing Alfresco ......................... Waiting" >> $INSTSCREEN
+				else
+					echo "	Installing Alfresco ......................... Skipping" >> $INSTSCREEN
+				fi
+				echo "	Installing Elastic Search ................... Waiting" >> $INSTSCREEN
+				echo "	Installing E.S. GUI ......................... Waiting" >> $INSTSCREEN
+				if [ "$COMBOINSTALL" = "true" ]
+				then
+					echo "	Installing Database ......................... Waiting" >> $INSTSCREEN
+					echo "	Installing Flowable ......................... Waiting" >> $INSTSCREEN
+					echo "	Installing Tomcat ........................... Waiting" >> $INSTSCREEN
+					echo "	Installing war files for Flowable ........... Waiting" >> $INSTSCREEN
+					echo "	Starting Tomcat ............................. Waiting" >> $INSTSCREEN
+				fi
+			;;
+			FLOWABLE)
+				echo "	Installing Database ......................... Waiting" >> $INSTSCREEN
+				echo "	Installing Flowable ......................... Waiting" >> $INSTSCREEN
+				echo "	Installing Tomcat ........................... Waiting" >> $INSTSCREEN
+				echo "	Installing war files for Flowable ........... Waiting" >> $INSTSCREEN
+				echo "	Starting Tomcat ............................. Waiting" >> $INSTSCREEN
+			;;
+			REA)
+			echo "	Installing Elastic Search ................... Waiting" >> $INSTSCREEN
+			echo "	Installing E.S. GUI ......................... Waiting" >> $INSTSCREEN
+			echo "	Installing REA .............................. Waiting" >> $INSTSCREEN
+			;;
+		esac
+		echo "	Creating App. version files ................. Waiting" >> $INSTSCREEN
+		if [ "$CLEARLOG" = "true" ]
+		then
+			echo "	Deleting Installation files ................. Waiting" >> $INSTSCREEN
+		else
+			echo "	Deleting Installation files ................. Skipping" >> $INSTSCREEN
+		fi
+		if [ "$REBOOTEND" = "true" ]
+		then
+			echo "	Final System reboot ..........................Waiting" >> $INSTSCREEN
+		else
+			echo "	Final System reboot ..........................Skipping" >> $INSTSCREEN
+		fi
 	fi
 }
 
@@ -2521,37 +2555,48 @@ Main()
 		echo ""
 	fi
 	
+	PREINSTSCREEN=$INSTALL_LOG_DIR/preinstscreen
+	INSTSCREEN=$INSTALL_LOG_DIR/instscreen
+	Create_screens
+	
 # **** System resource check for Alfresco only ****
 
 	if [ "$ALFRESCO" = "true" ]
 	then
-		Paint_screen Running Waiting Waiting Waiting Waiting Waiting
+		sed -i -e 's/Checking system resources ................... Waiting/Checking system resources ................... Running/g' $PREINSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
 		Resource_check
+		sed -i -e 's/Checking system resources ................... Running/Checking system resources ................... Completed/g' $PREINSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
 	fi
 	
 # **** Check for existence of all installation files ****
-
-	Paint_screen Completed Running Waiting Waiting Waiting Waiting
+	sed -i -e 's/Checking existence of installation files ..... Waiting/Checking existence of installation files ..... Running/g' $PREINSTSCREEN >$ILOG 2>>$ERROR
+	Paint_screen
 	Check_install_files
+	sed -i -e 's/Checking existence of installation files ..... Running/Checking existence of installation files ..... Completed/g' $PREINSTSCREEN >$ILOG 2>>$ERROR
+	Paint_screen
 	
 # **** Complete O.S. changes ****
 
 	if [ ! -f $INSTALL_LOG_DIR/oschange.log ]
 	then
-		Paint_screen Completed Completed Running Waiting Waiting Waiting
+		sed -i -e 's/Changing O.S. settings ....................... Waiting/Changing O.S. settings ....................... Running/g' $PREINSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
 		Change_os_settings
-	else
-		Paint_screen Completed Completed Completed Waiting Waiting Waiting
+		sed -i -e 's/Changing O.S. settings ....................... Running/Changing O.S. settings ....................... Completed/g' $PREINSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
 	fi
 	
 # **** Create / Install auto start script + VM Welcome screen ****
 
 	if [ ! -f $INSTALL_LOG_DIR/scriptinstall.log ]
 	then
-		Paint_screen Completed Completed Completed Running Waiting Waiting
+		sed -i -e 's/Installing auto start scripts ................ Waiting/Installing auto start scripts ................ Running/g' $PREINSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
 		Install_scripts
-	else
-		Paint_screen Completed Completed Completed Completed Waiting Waiting
+		sed -i -e 's/Installing auto start scripts ................ Running/Installing auto start scripts ................ Completed/g' $PREINSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
 	fi
 	
 # **** Resetting the root password for the demo VM ****
@@ -2560,355 +2605,99 @@ Main()
 	then
 		if [ "$DEMOVM" = "true" ]
 		then
-			Paint_screen Completed Completed Completed Completed Running Waiting
+			sed -i -e 's/Resetting the root password .................. Waiting/Resetting the root password .................. Running/g' $PREINSTSCREEN >$ILOG 2>>$ERROR
+			Paint_screen
 			Reset_rootpw
-		else
-			Paint_screen Completed Completed Completed Completed Skipping Waiting
+			sed -i -e 's/Resetting the root password .................. Running/Resetting the root password .................. Completed/g' $PREINSTSCREEN >$ILOG 2>>$ERROR
+			Paint_screen
 		fi
-	else
-		Paint_screen Completed Completed Completed Completed Completed Waiting
 	fi
 	
 # **** System reboot after initial setup ****
 	
 	if [ ! -f $INSTALL_LOG_DIR/reboot.log ]
 	then
-		Paint_screen Completed Completed Completed Completed Completed Triggered
+		sed -i -e 's/System reboot ................................ Waiting/System reboot ................................ Triggered/g' $PREINSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
 		sleep 5
 		touch $INSTALL_LOG_DIR/reboot.log
 		reboot
 	fi
 	
 # **** Checking for O.S. tools and updates ****
-
-	if [ "$CLEARLOG" = "true" ]
-	then
-		SCLEARLOG="Waiting"
-	else
-		SCLEARLOG="Skipping"
-	fi
-	case "$APPLICATION" in
-		IBPM)
-			if [ "$INSTALLJBOSS" = "true" ]
-			then
-				if [ "$INSTALLIBPM" = "true" ]
-				then
-					SJBOSS="Waiting"
-					SJBOSSPATCH="Waiting"
-					SJBOSSSTART="Waiting"
-					SJBOSSCONFIG="Waiting"
-					SIBPMENGINE="Waiting"
-					SIBPMCONFIG="Waiting"
-					SIBPMINSTALL="Waiting"
-					SBALINSTALL="Waiting"
-					SWARINSTALL="Waiting"
-				else
-					SJBOSS="Waiting"
-					SJBOSSPATCH="Waiting"
-					SJBOSSSTART="Waiting"
-					SJBOSSCONFIG="Waiting"
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-			else
-				SJBOSS="Skipping"
-				SJBOSSPATCH="Skipping"
-				SJBOSSSTART="Skipping"
-				SJBOSSCONFIG="Skipping"
-				SIBPMENGINE="Skipping"
-				SIBPMCONFIG="Skipping"
-				SIBPMINSTALL="Skipping"
-				SBALINSTALL="Skipping"
-				SWARINSTALL="Skipping"
-			fi
-			if [ "$ALFRESCO" = "true" ]
-			then
-				SALFRESCO="Waiting"
-			else
-				SALFRESCO="Skipping"
-			fi
-			Paint_screen Running Waiting Waiting Waiting $SJBOSS $SJBOSSPATCH $SJBOSSSTART $SJBOSSCONFIG $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-		;;
-		FLOWABLE)
-			Paint_screen Running Waiting Waiting Waiting Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-		;;
-		REA)
-			Paint_screen Running Waiting Waiting Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-		;;
-	esac
+	sed -i -e 's/Checking O.S Tools .......................... Waiting/Checking O.S Tools .......................... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+	Paint_screen
 	Check_tools
+	sed -i -e 's/Checking O.S Tools .......................... Running/Checking O.S Tools .......................... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+	Paint_screen
 	
 # **** Installing JDK ****
 
 	if [ ! -f $INSTALL_LOG_DIR/jdkinstalled.log ]
 	then
-		case "$APPLICATION" in
-			IBPM)
-				if [ "$INSTALLJBOSS" = "true" ]
-				then
-					if [ "$INSTALLIBPM" = "true" ]
-					then
-						SJBOSS="Waiting"
-						SJBOSSPATCH="Waiting"
-						SJBOSSSTART="Waiting"
-						SJBOSSCONFIG="Waiting"
-						SIBPMENGINE="Waiting"
-						SIBPMCONFIG="Waiting"
-						SIBPMINSTALL="Waiting"
-						SBALINSTALL="Waiting"
-						SWARINSTALL="Waiting"
-					else
-						SJBOSS="Waiting"
-						SJBOSSPATCH="Waiting"
-						SJBOSSSTART="Waiting"
-						SJBOSSCONFIG="Waiting"
-						SIBPMENGINE="Skipping"
-						SIBPMCONFIG="Skipping"
-						SIBPMINSTALL="Skipping"
-						SBALINSTALL="Skipping"
-						SWARINSTALL="Skipping"
-					fi
-				else
-					SJBOSS="Skipping"
-					SJBOSSPATCH="Skipping"
-					SJBOSSSTART="Skipping"
-					SJBOSSCONFIG="Skipping"
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-				if [ "$ALFRESCO" = "true" ]
-				then
-					SALFRESCO="Waiting"
-				else
-					SALFRESCO="Skipping"
-				fi
-				Paint_screen Completed Running Waiting Waiting $SJBOSS $SJBOSSPATCH $SJBOSSSTART $SJBOSSCONFIG $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-			;;
-			FLOWABLE)
-				Paint_screen Completed Running Waiting Waiting Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-			;;
-			REA)
-				Paint_screen Completed Running Waiting Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-			;;
-		esac
+		sed -i -e 's/Installing JDK8 ............................. Waiting/Installing JDK8 ............................. Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
 		Install_jdk
+		sed -i -e 's/Installing JDK8 ............................. Running/Installing JDK8 ............................. Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
 	fi
 	
 # **** Installing the VM Web page ****
 
 	if [ ! -f $INSTALL_LOG_DIR/webpage.log ]
 	then
-		case "$APPLICATION" in
-			IBPM)
-				if [ "$INSTALLJBOSS" = "true" ]
-				then
-					if [ "$INSTALLIBPM" = "true" ]
-					then
-						SJBOSS="Waiting"
-						SJBOSSPATCH="Waiting"
-						SJBOSSSTART="Waiting"
-						SJBOSSCONFIG="Waiting"
-						SIBPMENGINE="Waiting"
-						SIBPMCONFIG="Waiting"
-						SIBPMINSTALL="Waiting"
-						SBALINSTALL="Waiting"
-						SWARINSTALL="Waiting"
-					else
-						SJBOSS="Waiting"
-						SJBOSSPATCH="Waiting"
-						SJBOSSSTART="Waiting"
-						SJBOSSCONFIG="Waiting"
-						SIBPMENGINE="Skipping"
-						SIBPMCONFIG="Skipping"
-						SIBPMINSTALL="Skipping"
-						SBALINSTALL="Skipping"
-						SWARINSTALL="Skipping"
-					fi
-				else
-					SJBOSS="Skipping"
-					SJBOSSPATCH="Skipping"
-					SJBOSSSTART="Skipping"
-					SJBOSSCONFIG="Skipping"
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-				if [ "$ALFRESCO" = "true" ]
-				then
-					SALFRESCO="Waiting"
-				else
-					SALFRESCO="Skipping"
-				fi
-				Paint_screen Completed Completed Running Waiting $SJBOSS $SJBOSSPATCH $SJBOSSSTART $SJBOSSCONFIG $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-			;;
-			FLOWABLE)
-				Paint_screen Completed Completed Running Waiting Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-			;;
-			REA)
-				Paint_screen Completed Completed Running Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-			;;
-		esac
+		sed -i -e 's/Installing VM web site ...................... Waiting/Installing VM web site ...................... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
 		Install_webpage
+		sed -i -e 's/Installing VM web site ...................... Running/Installing VM web site ...................... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+	fi
+	
+# **** Installing the Chat client ****
+	
+	if [ ! -f $INSTALL_LOG_DIR/chat.log ]
+	then
+		sed -i -e 's/Installing Chat ............................. Waiting/Installing Chat ............................. Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+		Install_chat
+		sed -i -e 's/Installing Chat ............................. Running/Installing Chat ............................. Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
 	fi
 	
 # **** The application specific installation of software starts below ****
 
 	case "$APPLICATION" in
 		IBPM)
+		sed -i -e 's/Installing DXP Database ..................... Waiting/Installing DXP Database ..................... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
 		if [ "$IBPMDB" = "oracle" ]
 		then
 			if [ ! -f $INSTALL_LOG_DIR/oracleinstalled.log ]
 			then
-				if [ "$INSTALLJBOSS" = "true" ]
-				then
-					if [ "$INSTALLIBPM" = "true" ]
-					then
-						SJBOSS="Waiting"
-						SJBOSSPATCH="Waiting"
-						SJBOSSSTART="Waiting"
-						SJBOSSCONFIG="Waiting"
-						SIBPMENGINE="Waiting"
-						SIBPMCONFIG="Waiting"
-						SIBPMINSTALL="Waiting"
-						SBALINSTALL="Waiting"
-						SWARINSTALL="Waiting"
-					else
-						SJBOSS="Waiting"
-						SJBOSSPATCH="Waiting"
-						SJBOSSSTART="Waiting"
-						SJBOSSCONFIG="Waiting"
-						SIBPMENGINE="Skipping"
-						SIBPMCONFIG="Skipping"
-						SIBPMINSTALL="Skipping"
-						SBALINSTALL="Skipping"
-						SWARINSTALL="Skipping"
-					fi
-				else
-					SJBOSS="Skipping"
-					SJBOSSPATCH="Skipping"
-					SJBOSSSTART="Skipping"
-					SJBOSSCONFIG="Skipping"
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-				if [ "$ALFRESCO" = "true" ]
-				then
-					SALFRESCO="Waiting"
-				else
-					SALFRESCO="Skipping"
-				fi
-				Paint_screen Completed Completed Completed Running $SJBOSS $SJBOSSPATCH $SJBOSSSTART $SJBOSSCONFIG $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
 				Install_oracle
 			fi 
 		else
 			if [ ! -f $INSTALL_LOG_DIR/postgresasinstalled.log ]
 			then
-				if [ "$INSTALLJBOSS" = "true" ]
-				then
-					if [ "$INSTALLIBPM" = "true" ]
-					then
-						SJBOSS="Waiting"
-						SJBOSSPATCH="Waiting"
-						SJBOSSSTART="Waiting"
-						SJBOSSCONFIG="Waiting"
-						SIBPMENGINE="Waiting"
-						SIBPMCONFIG="Waiting"
-						SIBPMINSTALL="Waiting"
-						SBALINSTALL="Waiting"
-						SWARINSTALL="Waiting"
-					else
-						SJBOSS="Waiting"
-						SJBOSSPATCH="Waiting"
-						SJBOSSSTART="Waiting"
-						SJBOSSCONFIG="Waiting"
-						SIBPMENGINE="Skipping"
-						SIBPMCONFIG="Skipping"
-						SIBPMINSTALL="Skipping"
-						SBALINSTALL="Skipping"
-						SWARINSTALL="Skipping"
-					fi
-				else
-					SJBOSS="Skipping"
-					SJBOSSPATCH="Skipping"
-					SJBOSSSTART="Skipping"
-					SJBOSSCONFIG="Skipping"
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-				if [ "$ALFRESCO" = "true" ]
-				then
-					SALFRESCO="Waiting"
-				else
-					SALFRESCO="Skipping"
-				fi
-				Paint_screen Completed Completed Completed Running $SJBOSS $SJBOSSPATCH $SJBOSSSTART $SJBOSSCONFIG $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
 				Install_postgresas
 			fi
 		fi
+		sed -i -e 's/Installing DXP Database ..................... Running/Installing DXP Database ..................... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
 		if [ "$INSTALLJBOSS" = "true" ]
 		then
 			if [ ! -f $INSTALL_LOG_DIR/jboss.log ]
 			then
-				if [ "$INSTALLIBPM" = "true" ]
-				then
-					SIBPMENGINE="Waiting"
-					SIBPMCONFIG="Waiting"
-					SIBPMINSTALL="Waiting"
-					SBALINSTALL="Waiting"
-					SWARINSTALL="Waiting"
-				else
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-				if [ "$ALFRESCO" = "true" ]
-				then
-					SALFRESCO="Waiting"
-				else
-					SALFRESCO="Skipping"
-				fi
-				Paint_screen Completed Completed Completed Completed Running Waiting Waiting Waiting $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				sed -i -e 's/Installing JBoss ............................ Waiting/Installing JBoss ............................ Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 				Install_jboss
+				sed -i -e 's/Installing JBoss ............................ Running/Installing JBoss ............................ Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 			fi
 			if [ ! -f $INSTALL_LOG_DIR/jbosspatches.log ]
 				then
-					if [ "$INSTALLIBPM" = "true" ]
-					then
-						SIBPMENGINE="Waiting"
-						SIBPMCONFIG="Waiting"
-						SIBPMINSTALL="Waiting"
-						SBALINSTALL="Waiting"
-						SWARINSTALL="Waiting"
-					else
-						SIBPMENGINE="Skipping"
-						SIBPMCONFIG="Skipping"
-						SIBPMINSTALL="Skipping"
-						SBALINSTALL="Skipping"
-						SWARINSTALL="Skipping"
-					fi
-					if [ "$ALFRESCO" = "true" ]
-					then
-						SALFRESCO="Waiting"
-					else
-						SALFRESCO="Skipping"
-					fi
-					Paint_screen Completed Completed Completed Completed Completed Running Waiting Waiting $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+					sed -i -e 's/Installing Patches for JBoss ................ Waiting/Installing Patches for JBoss ................ Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+					Paint_screen
 					PNUM=1
 					for patch in `ls $INSTALL_FILE_DIR/software/Patch/jboss-eap-6/jboss-eap-6.4.?.CP.zip`
 					do
@@ -2939,308 +2728,81 @@ Main()
 						fi
 					fi
 					touch $INSTALL_LOG_DIR/jbosspatches.log
+					sed -i -e 's/Installing Patches for JBoss ................ Running/Installing Patches for JBoss ................ Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+					Paint_screen
 			fi
 			if [ ! -f $INSTALL_LOG_DIR/jbossstart.log ]
 			then
-				if [ "$INSTALLIBPM" = "true" ]
-				then
-					SIBPMENGINE="Waiting"
-					SIBPMCONFIG="Waiting"
-					SIBPMINSTALL="Waiting"
-					SBALINSTALL="Waiting"
-					SWARINSTALL="Waiting"
-				else
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-				if [ "$ALFRESCO" = "true" ]
-				then
-					SALFRESCO="Waiting"
-				else
-					SALFRESCO="Skipping"
-				fi
-				Paint_screen Completed Completed Completed Completed Completed Completed Running Waiting $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				sed -i -e 's/Starting JBoss .............................. Waiting/Starting JBoss .............................. Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 				Jboss_startup
+				sed -i -e 's/Starting JBoss .............................. Running/Starting JBoss .............................. Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 			fi
 			if [ ! -f $INSTALL_LOG_DIR/jdbcconfig.log ]
 			then
-				if [ "$INSTALLIBPM" = "true" ]
-				then
-					SIBPMENGINE="Waiting"
-					SIBPMCONFIG="Waiting"
-					SIBPMINSTALL="Waiting"
-					SBALINSTALL="Waiting"
-					SWARINSTALL="Waiting"
-				else
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-				if [ "$ALFRESCO" = "true" ]
-				then
-					SALFRESCO="Waiting"
-				else
-					SALFRESCO="Skipping"
-				fi
-				Paint_screen Completed Completed Completed Completed Completed Completed Completed Running $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				sed -i -e 's/Configuring JBoss ........................... Waiting/Configuring JBoss ........................... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 				Jdbc_config
+				sed -i -e 's/Configuring JBoss ........................... Running/Configuring JBoss ........................... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 			fi
 		fi
 		if [ "$INSTALLJBOSS" = "true" ] && [ "$INSTALLIBPM" = "true" ]
 		then
 			if [ ! -f $INSTALL_LOG_DIR/engineconfig.log ]
 			then
-				if [ "$ALFRESCO" = "true" ]
-				then
-					SALFRESCO="Waiting"
-				else
-					SALFRESCO="Skipping"
-				fi
-				Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Running Waiting Waiting Waiting Waiting $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				sed -i -e 's/Unzipping IBPM engine folder ................ Waiting/Unzipping IBPM engine folder ................ Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 				Ibpm_engine
+				sed -i -e 's/Unzipping IBPM engine folder ................ Running/Unzipping IBPM engine folder ................ Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 			fi
 			if [ ! -f $INSTALL_LOG_DIR/setupconfig.log ]
 			then
-				if [ "$ALFRESCO" = "true" ]
-				then
-					SALFRESCO="Waiting"
-				else
-					SALFRESCO="Skipping"
-				fi
-				Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Running Waiting Waiting Waiting $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				sed -i -e 's/Configuring IBPM pre-installation ........... Waiting/Configuring IBPM pre-installation ........... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 				Setup_config
+				sed -i -e 's/Configuring IBPM pre-installation ........... Running/Configuring IBPM pre-installation ........... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 			fi
 			if [ ! -f $INSTALL_LOG_DIR/ibpminstalled.log ]
 			then
-				if [ "$ALFRESCO" = "true" ]
-				then
-					SALFRESCO="Waiting"
-				else
-					SALFRESCO="Skipping"
-				fi
-				Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed Running Waiting Waiting $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				sed -i -e 's/Installing IBPM ............................. Waiting/Installing IBPM ............................. Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 				Install_ibpm
+				sed -i -e 's/Installing IBPM ............................. Running/Installing IBPM ............................. Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 			fi
 			if [ ! -f $INSTALL_LOG_DIR/bpmaction.log ]
 			then
-				if [ "$ALFRESCO" = "true" ]
-				then
-					SALFRESCO="Waiting"
-				else
-					SALFRESCO="Skipping"
-				fi
-				Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed Running Waiting $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				sed -i -e 's/Installing BPM Action Library ............... Waiting/Installing BPM Action Library ............... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 				Install_bpmaction
+				sed -i -e 's/Installing BPM Action Library ............... Running/Installing BPM Action Library ............... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 			fi
 			if [ ! -f $INSTALL_LOG_DIR/warinstalled.log ]
 			then
-				if [ "$ALFRESCO" = "true" ]
-				then
-					SALFRESCO="Waiting"
-				else
-					SALFRESCO="Skipping"
-				fi
-				Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed Running $SALFRESCO Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				sed -i -e 's/Installing war files ........................ Waiting/Installing war files ........................ Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 				Install_war
+				sed -i -e 's/Installing war files ........................ Running/Installing war files ........................ Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 			fi
 		fi
 		if [ "$ALFRESCO" = "true" ]
 		then
 			if [ ! -f $INSTALL_LOG_DIR/alfresco.log ]
 			then
-				Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed Running Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
+				sed -i -e 's/Installing Alfresco ......................... Waiting/Installing Alfresco ......................... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 				Install_alfresco
+				sed -i -e 's/Installing Alfresco ......................... Running/Installing Alfresco ......................... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 			fi
 		fi
-		if [ ! -f $INSTALL_LOG_DIR/elasticsearch.log ]
-		then
-			if [ "$INSTALLJBOSS" = "true" ]
-			then
-				if [ "$INSTALLIBPM" = "true" ]
-				then
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Completed"
-					SIBPMCONFIG="Completed"
-					SIBPMINSTALL="Completed"
-					SBALINSTALL="Completed"
-					SWARINSTALL="Completed"
-				else
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-			else
-				SJBOSS="Skipping"
-				SJBOSSPATCH="Skipping"
-				SJBOSSSTART="Skipping"
-				SJBOSSCONFIG="Skipping"
-				SIBPMENGINE="Skipping"
-				SIBPMCONFIG="Skipping"
-				SIBPMINSTALL="Skipping"
-				SBALINSTALL="Skipping"
-				SWARINSTALL="Skipping"
-			fi
-			if [ "$ALFRESCO" = "true" ]
-			then
-				SALFRESCO="Completed"
-			else
-				SALFRESCO="Skipping"
-			fi
-			Paint_screen Completed Completed Completed Completed $SJBOSS $SJBOSSPATCH $SJBOSSSTART $SJBOSSCONFIG $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Running Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-			Install_elastic
-		fi
-		if [ ! -f $INSTALL_LOG_DIR/kibana.log ]
-		then
-			if [ "$INSTALLJBOSS" = "true" ]
-			then
-				if [ "$INSTALLIBPM" = "true" ]
-				then
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Completed"
-					SIBPMCONFIG="Completed"
-					SIBPMINSTALL="Completed"
-					SBALINSTALL="Completed"
-					SWARINSTALL="Completed"
-				else
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-			else
-				SJBOSS="Skipping"
-				SJBOSSPATCH="Skipping"
-				SJBOSSSTART="Skipping"
-				SJBOSSCONFIG="Skipping"
-				SIBPMENGINE="Skipping"
-				SIBPMCONFIG="Skipping"
-				SIBPMINSTALL="Skipping"
-				SBALINSTALL="Skipping"
-				SWARINSTALL="Skipping"
-			fi
-			if [ "$ALFRESCO" = "true" ]
-			then
-				SALFRESCO="Completed"
-			else
-				SALFRESCO="Skipping"
-			fi
-			Paint_screen Completed Completed Completed Completed $SJBOSS $SJBOSSPATCH $SJBOSSSTART $SJBOSSCONFIG $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Completed Running Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-			Install_kibana
-		fi
-		if [ ! -f $INSTALL_LOG_DIR/kibanaplugin.log ]
-		then
-			if [ "$INSTALLJBOSS" = "true" ]
-			then
-				if [ "$INSTALLIBPM" = "true" ]
-				then
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Completed"
-					SIBPMCONFIG="Completed"
-					SIBPMINSTALL="Completed"
-					SBALINSTALL="Completed"
-					SWARINSTALL="Completed"
-				else
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-			else
-				SJBOSS="Skipping"
-				SJBOSSPATCH="Skipping"
-				SJBOSSSTART="Skipping"
-				SJBOSSCONFIG="Skipping"
-				SIBPMENGINE="Skipping"
-				SIBPMCONFIG="Skipping"
-				SIBPMINSTALL="Skipping"
-				SBALINSTALL="Skipping"
-				SWARINSTALL="Skipping"
-			fi
-			if [ "$ALFRESCO" = "true" ]
-			then
-				SALFRESCO="Completed"
-			else
-				SALFRESCO="Skipping"
-			fi
-			Paint_screen Completed Completed Completed Completed $SJBOSS $SJBOSSPATCH $SJBOSSSTART $SJBOSSCONFIG $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Completed Completed Running Waiting Waiting Waiting $SCLEARLOG Waiting
-			Install_kibanaplugin
-		fi
-		if [ ! -f $INSTALL_LOG_DIR/esgui.log ]
-		then
-			if [ "$INSTALLJBOSS" = "true" ]
-			then
-				if [ "$INSTALLIBPM" = "true" ]
-				then
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Completed"
-					SIBPMCONFIG="Completed"
-					SIBPMINSTALL="Completed"
-					SBALINSTALL="Completed"
-					SWARINSTALL="Completed"
-				else
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-			else
-				SJBOSS="Skipping"
-				SJBOSSPATCH="Skipping"
-				SJBOSSSTART="Skipping"
-				SJBOSSCONFIG="Skipping"
-				SIBPMENGINE="Skipping"
-				SIBPMCONFIG="Skipping"
-				SIBPMINSTALL="Skipping"
-				SBALINSTALL="Skipping"
-				SWARINSTALL="Skipping"
-			fi
-			if [ "$ALFRESCO" = "true" ]
-			then
-				SALFRESCO="Completed"
-			else
-				SALFRESCO="Skipping"
-			fi
-			Paint_screen Completed Completed Completed Completed $SJBOSS $SJBOSSPATCH $SJBOSSSTART $SJBOSSCONFIG $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Completed Completed Completed Running Waiting Waiting $SCLEARLOG Waiting
-			Install_esgui
-		fi
+		Install_es
 		if [ -f $INSTALL_DIR/AgileAdapterData/Analytics.properties ]
 		then
 			sed -i -e "s/polling_in_seconds: 30/polling_in_seconds: 0/g" $TARGET_DIR/AgileAdapterData/Analytics.properties
@@ -3249,312 +2811,39 @@ Main()
 		then
 			APPLICATION="FLOWABLE"
 			Check_install_files
-			if [ ! -f $INSTALL_LOG_DIR/postgresinstalled.log ]
-			then
-				Paint_screen Completed Completed Completed Running Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-				Install_postgres
-			fi
-			if [ ! -f $INSTALL_LOG_DIR/flowable.log ]
-			then
-				Paint_screen Completed Completed Completed Completed Running Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-				Install_flowable
-			fi
-			if [ ! -f $INSTALL_LOG_DIR/tomcat.log ]
-			then
-				Paint_screen Completed Completed Completed Completed Completed Running Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-				Install_tomcat
-			fi
-			if [ ! -f $INSTALL_LOG_DIR/flowablewars.log ]
-			then
-				Paint_screen Completed Completed Completed Completed Completed Completed Running Waiting Waiting Waiting $SCLEARLOG Waiting
-				Install_flowable_wars
-			fi
-			if [ ! -f $INSTALL_LOG_DIR/tomcatstart.log ]
-			then
-				Paint_screen Completed Completed Completed Completed Completed Completed Completed Running Waiting Waiting $SCLEARLOG Waiting
-				Start_tomcat
-			fi
+			Install_dxpcommunity
 			APPLICATION="IBPM"
 		fi
-		
-		
 		;;
 		FLOWABLE)
-			if [ ! -f $INSTALL_LOG_DIR/postgresinstalled.log ]
-			then
-				Paint_screen Completed Completed Completed Running Waiting Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-				Install_postgres
-			fi
-			if [ ! -f $INSTALL_LOG_DIR/flowable.log ]
-			then
-				Paint_screen Completed Completed Completed Completed Running Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-				Install_flowable
-			fi
-			if [ ! -f $INSTALL_LOG_DIR/tomcat.log ]
-			then
-				Paint_screen Completed Completed Completed Completed Completed Running Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-				Install_tomcat
-			fi
-			if [ ! -f $INSTALL_LOG_DIR/flowablewars.log ]
-			then
-				Paint_screen Completed Completed Completed Completed Completed Completed Running Waiting Waiting Waiting $SCLEARLOG Waiting
-				Install_flowable_wars
-			fi
-			if [ ! -f $INSTALL_LOG_DIR/tomcatstart.log ]
-			then
-				Paint_screen Completed Completed Completed Completed Completed Completed Completed Running Waiting Waiting $SCLEARLOG Waiting
-				Start_tomcat
-			fi
+			Install_dxpcommunity
 		;;
 		REA)
-			if [ ! -f $INSTALL_LOG_DIR/elasticsearch.log ]
-			then
-				Paint_screen Completed Completed Completed Running Waiting Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-				Install_elastic
-			fi
-			if [ ! -f $INSTALL_LOG_DIR/kibana.log ]
-			then
-				Paint_screen Completed Completed Completed Completed Running Waiting Waiting Waiting Waiting $SCLEARLOG Waiting
-				Install_kibana
-			fi
-			if [ ! -f $INSTALL_LOG_DIR/esgui.log ]
-			then
-				Paint_screen Completed Completed Completed Completed Completed Running Waiting Waiting Waiting $SCLEARLOG Waiting
-				Install_esgui
-			fi
+			Install_es
 			if [ ! -f $INSTALL_LOG_DIR/rea.log ]
 			then
-				Paint_screen Completed Completed Completed Completed Completed Completed Running Waiting Waiting $SCLEARLOG Waiting
+				sed -i -e 's/Installing REA .............................. Waiting/Installing REA .............................. Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 				Install_rea
+				sed -i -e 's/Installing REA .............................. Running/Installing REA .............................. Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
 			fi
 		;;
 	esac
-	if [ ! -f $INSTALL_LOG_DIR/chat.log ]
-	then
-		case "$APPLICATION" in
-			IBPM)
-				if [ "$INSTALLJBOSS" = "true" ]
-				then
-					if [ "$INSTALLIBPM" = "true" ]
-					then
-						SJBOSS="Completed"
-						SJBOSSPATCH="Completed"
-						SJBOSSSTART="Completed"
-						SJBOSSCONFIG="Completed"
-						SIBPMENGINE="Completed"
-						SIBPMCONFIG="Completed"
-						SIBPMINSTALL="Completed"
-						SBALINSTALL="Completed"
-						SWARINSTALL="Completed"
-					else
-						SJBOSS="Completed"
-						SJBOSSPATCH="Completed"
-						SJBOSSSTART="Completed"
-						SJBOSSCONFIG="Completed"
-						SIBPMENGINE="Skipping"
-						SIBPMCONFIG="Skipping"
-						SIBPMINSTALL="Skipping"
-						SBALINSTALL="Skipping"
-						SWARINSTALL="Skipping"
-					fi
-				else
-					SJBOSS="Skipping"
-					SJBOSSPATCH="Skipping"
-					SJBOSSSTART="Skipping"
-					SJBOSSCONFIG="Skipping"
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-				if [ "$ALFRESCO" = "true" ]
-				then
-					SALFRESCO="Completed"
-				else
-					SALFRESCO="Skipping"
-				fi
-				Paint_screen Completed Completed Completed Completed $SJBOSS $SJBOSSPATCH $SJBOSSSTART $SJBOSSCONFIG $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Completed Completed Completed Completed Running Waiting $SCLEARLOG Waiting
-			;;
-			FLOWABLE)
-				Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Running Waiting $SCLEARLOG Waiting
-			;;
-			REA)
-				Paint_screen Completed Completed Completed Completed Completed Completed Completed Running Waiting $SCLEARLOG Waiting
-			;;
-		esac
-		Install_chat
-	fi
-	case "$APPLICATION" in
-		IBPM)
-			if [ "$INSTALLJBOSS" = "true" ]
-			then
-				if [ "$INSTALLIBPM" = "true" ]
-				then
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Completed"
-					SIBPMCONFIG="Completed"
-					SIBPMINSTALL="Completed"
-					SBALINSTALL="Completed"
-					SWARINSTALL="Completed"
-				else
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-			else
-				SJBOSS="Skipping"
-				SJBOSSPATCH="Skipping"
-				SJBOSSSTART="Skipping"
-				SJBOSSCONFIG="Skipping"
-				SIBPMENGINE="Skipping"
-				SIBPMCONFIG="Skipping"
-				SIBPMINSTALL="Skipping"
-				SBALINSTALL="Skipping"
-				SWARINSTALL="Skipping"
-			fi
-			if [ "$ALFRESCO" = "true" ]
-			then
-				SALFRESCO="Completed"
-			else
-				SALFRESCO="Skipping"
-			fi
-			Paint_screen Completed Completed Completed Completed $SJBOSS $SJBOSSPATCH $SJBOSSSTART $SJBOSSCONFIG $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Completed Completed Completed Completed Completed Running $SCLEARLOG Waiting
-		;;
-		FLOWABLE)
-			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Running $SCLEARLOG Waiting
-		;;
-		REA)
-			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Running $SCLEARLOG Waiting
-		;;
-	esac
+	sed -i -e 's/Creating App. version files ................. Waiting/Creating App. version files ................. Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+	Paint_screen
 	Create_appversion
-	if [ "$CLEARLOG" = "true" ]
-	then
-		SCLEARLOG="Running"
-	else
-		SCLEARLOG="Skipping"
-	fi
-	case "$APPLICATION" in
-		IBPM)
-			if [ "$INSTALLJBOSS" = "true" ]
-			then
-				if [ "$INSTALLIBPM" = "true" ]
-				then
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Completed"
-					SIBPMCONFIG="Completed"
-					SIBPMINSTALL="Completed"
-					SBALINSTALL="Completed"
-					SWARINSTALL="Completed"
-				else
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-			else
-				SJBOSS="Skipping"
-				SJBOSSPATCH="Skipping"
-				SJBOSSSTART="Skipping"
-				SJBOSSCONFIG="Skipping"
-				SIBPMENGINE="Skipping"
-				SIBPMCONFIG="Skipping"
-				SIBPMINSTALL="Skipping"
-				SBALINSTALL="Skipping"
-				SWARINSTALL="Skipping"
-			fi
-			if [ "$ALFRESCO" = "true" ]
-			then
-				SALFRESCO="Completed"
-			else
-				SALFRESCO="Skipping"
-			fi
-			Paint_screen Completed Completed Completed Completed $SJBOSS $SJBOSSPATCH $SJBOSSSTART $SJBOSSCONFIG $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Completed Completed Completed Completed Completed Completed $SCLEARLOG Waiting
-		;;
-		FLOWABLE)
-			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed $SCLEARLOG Waiting
-		;;
-		REA)
-			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed $SCLEARLOG Waiting
-		;;
-	esac
+	sed -i -e 's/Creating App. version files ................. Running/Creating App. version files ................. Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+	Paint_screen
+
+	sed -i -e 's/Deleting Installation files ................. Waiting/Deleting Installation files ................. Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+	Paint_screen
 	Cleanup_install
-	if [ "$CLEARLOG" = "true" ]
-	then
-		SCLEARLOG="Completed"
-	else
-		SCLEARLOG="Skipping"
-	fi
-	case "$APPLICATION" in
-		IBPM)
-			if [ "$INSTALLJBOSS" = "true" ]
-			then
-				if [ "$INSTALLIBPM" = "true" ]
-				then
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Completed"
-					SIBPMCONFIG="Completed"
-					SIBPMINSTALL="Completed"
-					SBALINSTALL="Completed"
-					SWARINSTALL="Completed"
-				else
-					SJBOSS="Completed"
-					SJBOSSPATCH="Completed"
-					SJBOSSSTART="Completed"
-					SJBOSSCONFIG="Completed"
-					SIBPMENGINE="Skipping"
-					SIBPMCONFIG="Skipping"
-					SIBPMINSTALL="Skipping"
-					SBALINSTALL="Skipping"
-					SWARINSTALL="Skipping"
-				fi
-			else
-				SJBOSS="Skipping"
-				SJBOSSPATCH="Skipping"
-				SJBOSSSTART="Skipping"
-				SJBOSSCONFIG="Skipping"
-				SIBPMENGINE="Skipping"
-				SIBPMCONFIG="Skipping"
-				SIBPMINSTALL="Skipping"
-				SBALINSTALL="Skipping"
-				SWARINSTALL="Skipping"
-			fi
-			if [ "$ALFRESCO" = "true" ]
-			then
-				SALFRESCO="Completed"
-			else
-				SALFRESCO="Skipping"
-			fi
-			Paint_screen Completed Completed Completed Completed $SJBOSS $SJBOSSPATCH $SJBOSSSTART $SJBOSSCONFIG $SIBPMENGINE $SIBPMCONFIG $SIBPMINSTALL $SBALINSTALL $SWARINSTALL $SALFRESCO Completed Completed Completed Completed Completed Completed $SCLEARLOG Triggered
-		;;
-		FLOWABLE)
-			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed Completed $SCLEARLOG Triggered
-		;;
-		REA)
-			Paint_screen Completed Completed Completed Completed Completed Completed Completed Completed Completed $SCLEARLOG Triggered
-		;;
-	esac
+	sed -i -e 's/Deleting Installation files ................. Running/Deleting Installation files ................. Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+	Paint_screen
+
+	sed -i -e 's/Final System reboot ..........................Waiting/Final System reboot ..........................Triggered/g' $INSTSCREEN >$ILOG 2>>$ERROR
+	Paint_screen
 	Last_reboot
 }
 

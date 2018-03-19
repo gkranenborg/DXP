@@ -1,8 +1,8 @@
 Init()
 {
-	STATUSresult=/var/www/html/scripts/STATUSresult.json
+	STATUSresult=/var/www/html/assets/STATUSresult.json
 	README=/root/README.txt
-	VERSIONresult=/var/www/html/scripts/version.json
+	VERSIONresult=/var/www/html/assets/version.json
 }
 
 Checks()
@@ -19,7 +19,7 @@ Checks()
 		then
 			if service oracle-xe status|grep "Connection refused" >/dev/null
 			then
-				Databasestatus="Stopped"
+				Databasetatus="Stopped"
 			fi
 		else
 				Databasestatus="Running"
@@ -29,12 +29,16 @@ Checks()
 		then
 			Databasestatus="Running"
 		else
-			if ps -ef|grep "postgres -D"|grep -v grep >/dev/null
-			then
-				Databasestatus="Running"
-			else
-				Databasestatus="Stopped"
-			fi
+			Databasestatus="Stopped"
+	    fi
+	fi
+	if [ -f /etc/rc.d/init.d/postgres ]
+	then	
+		if ps -ef|grep "postgres -D"|grep -v grep >/dev/null
+		then
+			Databaseflowstatus="Running"
+		else
+			Databaseflowstatus="Stopped"
 		fi
 	fi
 	if ps -ef|grep "catalina" | grep "tomcat" >/dev/null
@@ -49,12 +53,6 @@ Checks()
 	else
 		Nginxstatus="Stopped"
 	fi
-	if ps -ef|grep "kibana" | grep "node" >/dev/null
-	then
-		Kibanastatus="Running"
-	else
-		Kibanastatus="Stopped"
-	fi
 	if service elasticsearch status | grep "running" >/dev/null
 	then
 		ESstatus="Running"
@@ -67,7 +65,7 @@ Checks()
 	else
 		Alfrescostatus="Stopped"
 	fi
-	echo "{\"database\":\"$Databasestatus\",\"jbossibpm\":\"$IBPMstatus\",\"tomcat\":\"$Tomcatstatus\",\"kibana\":\"$Kibanastatus\",\"elasticsearch\":\"$ESstatus\",\"alfresco\":\"$Alfrescostatus\",\"nginx\":\"$Nginxstatus\"}">$STATUSresult
+	echo "{\"database\":\"$Databasestatus\",\"databaseflow\":\"$Databaseflowstatus\",\"jbossibpm\":\"$IBPMstatus\",\"tomcat\":\"$Tomcatstatus\",\"elasticsearch\":\"$ESstatus\",\"alfresco\":\"$Alfrescostatus\",\"nginx\":\"$Nginxstatus\"}">$STATUSresult
 }
 
 Version()
