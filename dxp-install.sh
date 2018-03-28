@@ -15,7 +15,7 @@ Init()
 # *                                                                                    *
 # **************************************************************************************
 
-	VERSION="14.1"
+	VERSION="14.2"
 	INSTALL_FILE_DIR=`pwd`
 	CONFIG_FILE=$INSTALL_FILE_DIR/dxp.config
 	SOFTWARE=$INSTALL_FILE_DIR/software
@@ -291,7 +291,7 @@ Check_install_files()
 		then
 			Check_file $SOFTWARE/ppasmeta-$VPPAS-linux-x64.tar.gz PPAS
 		else
-			Check_file $SOFTWARE/oracle-xe-$VORACLE-1.0.x86_64.rpm ORACLE
+			Check_file $SOFTWARE/oracle-xe-$VORACLE-1.0.x86_64.rpm.zip ORACLE
 			Check_file $MISC_DIR/smtphost.sql SMTPHOST
 		fi
 	fi
@@ -462,10 +462,9 @@ Install_scripts()
 		echo "NEWVMIP=\`ip addr | grep \"inet\" | grep -ve \"127.0.0.1\" | grep -ve \"inet6\" | awk '{print \$2}' | cut -f1 -d\"/\"\`" >> /etc/rc.d/init.d/ipchange
 		echo "HOSTNAME=\`hostname\`" >> /etc/rc.d/init.d/ipchange
 		echo "OLDVMIP=\`grep \$HOSTNAME /etc/hosts | cut -f1 -d'	'\`" >> /etc/rc.d/init.d/ipchange
-		echo "sed -i -e \"s/\$HOSTNAME//g\" /etc/hosts 2>$ILOG" >> /etc/rc.d/init.d/ipchange
-		echo "sed -i -e \"s/\$NEWVMIP//g\" /etc/hosts 2>$ILOG" >> /etc/rc.d/init.d/ipchange
-		echo "sed -i -e \"s/\$OLDVMIP//g\" /etc/hosts 2>$ILOG" >> /etc/rc.d/init.d/ipchange
-		echo "sed -i '/^\s*$/d' /etc/hosts 2>$ILOG" >> /etc/rc.d/init.d/ipchange
+		echo "sed -i \"/\$HOSTNAME/d\" /etc/hosts 2>/dev/null" >> /etc/rc.d/init.d/ipchange
+		echo "sed -i \"/\$NEWVMIP/d\" /etc/hosts 2>/dev/null" >> /etc/rc.d/init.d/ipchange
+		echo "sed -i \"/\$OLDVMIP/d\" /etc/hosts 2>/dev/null" >> /etc/rc.d/init.d/ipchange
 		echo "echo \"\$NEWVMIP	\$HOSTNAME\" >> /etc/hosts" >> /etc/rc.d/init.d/ipchange
 		chmod 755 /etc/rc.d/init.d/ipchange 2>>$ERROR
 		chkconfig --add ipchange 2>>$ERROR
@@ -612,7 +611,7 @@ Check_tools()
 	fi
 	if [ "$IBPMDB" = "oracle" -a "$APPLICATION" = "IBPM" ]
 	then
-		yum -y install bc
+		yum -y install bc >$ILOG 2>>$ERROR
 		ret=$?
 		if [ $ret -ne 0 ]
 		then
@@ -693,10 +692,6 @@ Install_oracle()
 	fi
 	if [ ! -f $INSTALL_LOG_DIR/oracleconfigured.log ]
 	then
-		ORACLEHTTP=`grep "ORACLEHTTP:" $SILENT_FILE | cut -f2 -d":"` 
-		ORACLELIST=`grep "ORACLELIST:" $SILENT_FILE | cut -f2 -d":"` 
-		ORACLEPWD=`grep "ORACLEPWD:" $SILENT_FILE | cut -f2 -d":"` 
-		ORACLESTART=`grep "ORACLESTART:" $SILENT_FILE | cut -f2 -d":"` 
 		/etc/init.d/oracle-xe configure << ORACCONF >$ILOG 2>&1
 $ORACLEHTTP
 $ORACLELIST
@@ -1277,7 +1272,7 @@ Install_tomcat()
 		Abort_install
 	else
 		rm -rf $INSTALL_LOG_DIR/apache.tar
-		echo "JAVA_OPTS=\"-XX:+CMSClassUnloadingEnabled -XX:MaxPermSize=256M\"" >>$TARGET_DIR/apache-tomcat-$VAPACHE/bin/setenv.sh
+		echo "JAVA_OPTS=\"-XX:+CMSClassUnloadingEnabled\"" >>$TARGET_DIR/apache-tomcat-$VAPACHE/bin/setenv.sh
 		cp $INSTALL_FILE_DIR/misc/post*jar $TARGET_DIR/apa*/lib >$ILOG 2>>$ERROR
 		if [ "$COMBOINSTALL" = "true" ]
 		then
@@ -1414,12 +1409,22 @@ Install_webpage()
 	systemctl enable httpd >$ILOG 2>&1
 	unzip $INSTALL_FILE_DIR/web/web.zip -d /var/www/html >$ILOG 2>>$ERROR
 	cp -r $INSTALL_FILE_DIR/web/scripts /var/www/html 2>>$ERROR
-	mkdir /var/www/html/assets >$ILOG 2>>$ERROR
 	cp $INSTALL_FILE_DIR/misc/README.txt /root/README.txt 2>>$ERROR
 	sed -i -e "s/version : /version : $VMVERSION/g" /root/README.txt 2>>$ERROR
 	chmod 755 /var/www/html/scripts/systemstatus 2>>$ERROR
 	/var/www/html/scripts/systemstatus 2>>$ERROR
-	echo "0,5,10,15,20,25,30,35,40,45,50,55 * * * * root /var/www/html/scripts/systemstatus" >> /etc/crontab 2>>$ERROR
+	echo "0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,34,35,36,37,38,39,40,41,42,43,44,45,46,47,48,49,50,51,52,53,54,55,56,57,58,59 * * * * root /var/www/html/scripts/systemstatus" >> /etc/crontab 2>>$ERROR
+	echo "<VirtualHost *:80>">>/etc/httpd/conf/httpd.conf
+	echo "ServerName $NEWHOSTNAME">>/etc/httpd/conf/httpd.conf
+	echo "DocumentRoot /var/www/html">>/etc/httpd/conf/httpd.conf
+	echo "<Directory \"/var/www/html\">">>/etc/httpd/conf/httpd.conf
+	echo "RewriteEngine on">>/etc/httpd/conf/httpd.conf
+    echo "RewriteCond %{REQUEST_FILENAME} -f [OR]">>/etc/httpd/conf/httpd.conf
+    echo "RewriteCond %{REQUEST_FILENAME} -d">>/etc/httpd/conf/httpd.conf
+    echo "RewriteRule ^ - [L]">>/etc/httpd/conf/httpd.conf
+    echo "RewriteRule ^ index.html">>/etc/httpd/conf/httpd.conf
+    echo "</Directory>">>/etc/httpd/conf/httpd.conf
+    echo "</VirtualHost>">>/etc/httpd/conf/httpd.conf
 	/usr/sbin/apachectl start 2>>$ERROR
 	touch $INSTALL_LOG_DIR/webpage.log
 }
@@ -2491,9 +2496,9 @@ Create_screens()
 		fi
 		if [ "$REBOOTEND" = "true" ]
 		then
-			echo "	Final System reboot ..........................Waiting" >> $INSTSCREEN
+			echo "	Final System reboot ......................... Waiting" >> $INSTSCREEN
 		else
-			echo "	Final System reboot ..........................Skipping" >> $INSTSCREEN
+			echo "	Final System reboot ......................... Skipping" >> $INSTSCREEN
 		fi
 	fi
 }
@@ -2835,14 +2840,12 @@ Main()
 	Create_appversion
 	sed -i -e 's/Creating App. version files ................. Running/Creating App. version files ................. Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
 	Paint_screen
-
 	sed -i -e 's/Deleting Installation files ................. Waiting/Deleting Installation files ................. Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
 	Paint_screen
 	Cleanup_install
 	sed -i -e 's/Deleting Installation files ................. Running/Deleting Installation files ................. Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
 	Paint_screen
-
-	sed -i -e 's/Final System reboot ..........................Waiting/Final System reboot ..........................Triggered/g' $INSTSCREEN >$ILOG 2>>$ERROR
+	sed -i -e 's/Final System reboot ......................... Waiting/Final System reboot ......................... Triggered/g' $INSTSCREEN >$ILOG 2>>$ERROR
 	Paint_screen
 	Last_reboot
 }
