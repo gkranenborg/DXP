@@ -15,7 +15,7 @@ Init()
 # *                                                                                    *
 # **************************************************************************************
 
-	VERSION="14.2"
+	VERSION="14.3"
 	INSTALL_FILE_DIR=`pwd`
 	CONFIG_FILE=$INSTALL_FILE_DIR/dxp.config
 	SOFTWARE=$INSTALL_FILE_DIR/software
@@ -624,6 +624,7 @@ Check_tools()
 		yum -y install epel-release >$ILOG 2>>$ERROR
 		yum -y install nginx >$ILOG 2>>$ERROR
 	fi
+	yum -y install samba >$ILOG 2>>$ERROR
 	yum -y update >$ILOG 2>&1
 	ret=$?
 	if [ $ret -ne 0 ]
@@ -1909,6 +1910,35 @@ Install_chat()
 	fi
 }
 
+Create_share()
+{
+# **************************************************************************************
+# *                                                                                    *
+# * This function will create a Samba share, to be 'shared' with the Windows host.     *
+# *                                                                                    *
+# **************************************************************************************
+	mkdir -p /opt/dxpshare >>$ERROR
+	cp /etc/samba/smb.conf /etc/samba/smb.conf.bck >>$ERROR
+	echo "[global]" >/etc/samba/smb.conf
+	echo "   workgroup = WORKGROUP" >>/etc/samba/smb.conf
+	echo "   security = user" >>/etc/samba/smb.conf
+	echo "" >>/etc/samba/smb.conf
+	echo "[dxpshare]" >>/etc/samba/smb.conf
+	echo "   path = /opt/dxpshare" >>/etc/samba/smb.conf
+	echo "   browsable = Yes" >>/etc/samba/smb.conf
+	echo "   writable = Yes" >>/etc/samba/smb.conf
+	smbpasswd -a root <<ENDSAMBA >$ILOG 2>>$ERROR
+Fujitsu1
+Fujitsu1
+ENDSAMBA
+	chown nobody:nobody /opt/dxpshare >>$ERROR
+	chcon -t samba_share_t /opt/dxpshare >>$ERROR
+	chmod 770 /opt/dxpshare >>$ERROR
+	systemctl enable smb >>$ERROR
+	systemctl start smb >>$ERROR
+	touch $INSTALL_LOG_DIR/samba.log
+}
+
 Create_appversion()
 {
 # **************************************************************************************
@@ -2424,6 +2454,7 @@ Create_screens()
 		echo "	Installing JDK8 ............................. Waiting" >> $INSTSCREEN
 		echo "	Installing VM web site ...................... Waiting" >> $INSTSCREEN
 		echo "	Installing Chat ............................. Waiting" >> $INSTSCREEN
+		echo "	Installing Samba ............................ Waiting" >> $INSTSCREEN
 		case "$APPLICATION" in
 			IBPM)
 				echo "	Installing DXP Database ..................... Waiting" >> $INSTSCREEN
@@ -2669,6 +2700,17 @@ Main()
 		Paint_screen
 	fi
 	
+# **** Installing the Samba share ****
+	
+	if [ ! -f $INSTALL_LOG_DIR/samba.log ]
+	then
+		sed -i -e 's/Installing Samba ............................ Waiting/Installing Samba ............................ Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+		Create_share
+		sed -i -e 's/Installing Samba ............................ Running/Installing Samba ............................ Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+		Paint_screen
+	fi
+	
 # **** The application specific installation of software starts below ****
 
 	case "$APPLICATION" in
@@ -2808,7 +2850,7 @@ Main()
 			fi
 		fi
 		Install_es
-		if [ -f $INSTALL_DIR/AgileAdapterData/Analytics.properties ]
+		if [ -f $TARGET_DIR/AgileAdapterData/Analytics.properties ]
 		then
 			sed -i -e "s/polling_in_seconds: 30/polling_in_seconds: 0/g" $TARGET_DIR/AgileAdapterData/Analytics.properties
 		fi

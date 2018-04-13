@@ -35,6 +35,21 @@ By default, your hosting machine (e.g. laptop) will not be able to use the VM's 
 
 ------------------------------------------------------------------------------------------------------------------------------------------
 
+Mapping the Linux share :
+
+By default, a share called dxpshare has been created within the demo VM. To use this share from your Windows host, map a new drive to this share as follows :
+
+Open the Windows Explorer on your Windows host and click 'Map network drive'. Enter \\interstagedemo\dxpshare in the 'Folder:' section.
+Check the box 'Reconnect at login' if you like, and make sure to check the box 'Connect using different credentials'.
+Now click 'Finish' and enter the following credentials to connect : root / Fujitsu1
+Check the box 'Remember my credentials' for future use.
+Click 'OK' to finish mapping the share.
+
+You should now see a new Windows 'drive' called 'dxpshare'. You should be able to open it, and write files to it.
+Those files will be located in the directory '/opt/dxpshare/' in your demo VM.
+
+Note : Make sure to finish the step above this section (updating your local hosts file first) or this will not work !!!!!
+
 Using the product :
 
 Now that the VM is up and running, please open up the browser on your own machine, and use http://interstagedemo (or any other URL as shown in the VM's welcome screen) to access the product.
