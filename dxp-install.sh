@@ -15,7 +15,7 @@ Init()
 # *                                                                                    *
 # **************************************************************************************
 
-	VERSION="14.3"
+	VERSION="14.4"
 	INSTALL_FILE_DIR=`pwd`
 	CONFIG_FILE=$INSTALL_FILE_DIR/dxp.config
 	SOFTWARE=$INSTALL_FILE_DIR/software
@@ -244,6 +244,7 @@ Check_install_files()
 	Check_file $WEB_DIR/scripts/systemstatus TMP
 	Check_file $INSTALL_FILE_DIR/options/chat/app.js TMP
 	Check_file $MISC_DIR/README.txt README
+	Check_file $MISC_DIR/windowsmount.sh MOUNT
 	
 # **** Checks if application is not Flowable or if only Flowable ****
 	
@@ -1936,6 +1937,8 @@ ENDSAMBA
 	chmod 770 /opt/dxpshare >>$ERROR
 	systemctl enable smb >>$ERROR
 	systemctl start smb >>$ERROR
+	cp -r $MOUNTFILE /root >>$ERROR
+	chmod 755 /root/windowsmount.sh >>$ERROR
 	touch $INSTALL_LOG_DIR/samba.log
 }
 
@@ -2168,6 +2171,10 @@ Last_reboot()
 # * This function will reboot the VM at the end of the installation.                   *
 # *                                                                                    *
 # **************************************************************************************
+	if [ -f /root/.shareinfo ]
+	then
+		rm -rf /root/.shareinfo >>$ERROR
+	fi
 	if [ "$REBOOTEND" = "true" ]
 	then
 		sleep 5

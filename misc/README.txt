@@ -50,6 +50,23 @@ Those files will be located in the directory '/opt/dxpshare/' in your demo VM.
 
 Note : Make sure to finish the step above this section (updating your local hosts file first) or this will not work !!!!!
 
+Mounting a Windows share :
+
+To mount a Windows share as an extra filesystem in the demo VM, follow these steps :
+
+- Create the Windows share by giving is a name and sharing it.
+- With the demoVM shutdown, open VMWare player, single click the name of the demo VM and go to 'Edit virtual machine settings', 'Options' (tab), 'Shared folders'.
+- On the right, select 'Always enabled' and click 'Add'. Browse to your Windows share folder and select it. Click 'OK' until you are back at the VMWare Player home screen.
+   Note : if any older shares are still listed in this section, go ahead and remove them if you no longer need them.
+- Boot the demo VM and login as root.
+- Run the following command :    ./windowsmount.sh
+- The first time you run this, it will ask 4 questions. The username should be the username having access to the Windows share. This can be a domain username, in that case,
+only enter the actual username not the domain name.
+- Once the script finishes, it will indicate where you can find the share inside the demo VM.
+- Each time you boot the VM, you need to login as root and run the same script. After the first run however it will only ask for the password, it is assumed you want to link
+to the same share each time.
+- If you want to link to another share, first remove the file /root/.shareinfo, after which you need to start at the top of this section by updating the VMWare player share settings.
+
 Using the product :
 
 Now that the VM is up and running, please open up the browser on your own machine, and use http://interstagedemo (or any other URL as shown in the VM's welcome screen) to access the product.
