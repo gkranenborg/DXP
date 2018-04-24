@@ -31,7 +31,7 @@ Get_info()
 	MOUNTPOINT=$MOUNTFS/$SHARENAME
 	echo ""
 	echo -n " Enter the password for user $WUSER : "
-	read PASSWD
+	read -s PASSWD
 	echo ""
 }
 
@@ -42,9 +42,10 @@ Mount_share()
 		mkdir -p $MOUNTPOINT 2>/dev/null
 		chmod 777 $MOUNTPOINT 2>/dev/null
 	fi
-	yum -y install cifs-utils >/dev/null 2>&1
+	echo ""
 	echo " The software is being installed and the share is being mounted. This may take a minute ...."
-	mount.cifs \\\\$HOST\\$SHARENAME $MOUNTPOINT -o user=$WUSER,pass="$PASSWD" >/dev/null 2>&1
+	yum -y install cifs-utils >/dev/null 2>&1
+	mount.cifs \\\\$HOST\\$SHARENAME $MOUNTPOINT -o user=$WUSER,pass="$PASSWD",vers=2.0 >/dev/null 2>&1
 	ret=$?
 	if [ $ret -ne 0 ]
 	then
