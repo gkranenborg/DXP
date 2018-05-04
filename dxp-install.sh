@@ -15,7 +15,7 @@ Init()
 # *                                                                                    *
 # **************************************************************************************
 
-	VERSION="14.4"
+	VERSION="14.5"
 	INSTALL_FILE_DIR=`pwd`
 	CONFIG_FILE=$INSTALL_FILE_DIR/dxp.config
 	SOFTWARE=$INSTALL_FILE_DIR/software
@@ -1918,8 +1918,8 @@ Create_share()
 # * This function will create a Samba share, to be 'shared' with the Windows host.     *
 # *                                                                                    *
 # **************************************************************************************
-	mkdir -p /opt/dxpshare >>$ERROR
-	cp /etc/samba/smb.conf /etc/samba/smb.conf.bck >>$ERROR
+	mkdir -p /opt/dxpshare > $ILOG 2>>$ERROR
+	cp /etc/samba/smb.conf /etc/samba/smb.conf.bck > $ILOG 2>>$ERROR
 	echo "[global]" >/etc/samba/smb.conf
 	echo "   workgroup = WORKGROUP" >>/etc/samba/smb.conf
 	echo "   security = user" >>/etc/samba/smb.conf
@@ -1928,17 +1928,17 @@ Create_share()
 	echo "   path = /opt/dxpshare" >>/etc/samba/smb.conf
 	echo "   browsable = Yes" >>/etc/samba/smb.conf
 	echo "   writable = Yes" >>/etc/samba/smb.conf
-	smbpasswd -a root <<ENDSAMBA >$ILOG 2>>$ERROR
+	smbpasswd -a root <<ENDSAMBA > $ILOG 2>>$ERROR
 Fujitsu1
 Fujitsu1
 ENDSAMBA
-	chown nobody:nobody /opt/dxpshare >>$ERROR
-	chcon -t samba_share_t /opt/dxpshare >>$ERROR
-	chmod 770 /opt/dxpshare >>$ERROR
-	systemctl enable smb >>$ERROR
-	systemctl start smb >>$ERROR
-	cp -r $MOUNTFILE /root >>$ERROR
-	chmod 755 /root/windowsmount.sh >>$ERROR
+	chown nobody:nobody /opt/dxpshare > $ILOG 2>>$ERROR
+	chcon -t samba_share_t /opt/dxpshare > $ILOG 2>>$ERROR
+	chmod 770 /opt/dxpshare > $ILOG 2>>$ERROR
+	systemctl enable smb > $ILOG 2>>$ERROR
+	systemctl start smb > $ILOG 2>>$ERROR
+	cp -r $MOUNTFILE /root > $ILOG 2>>$ERROR
+	chmod 755 /root/windowsmount.sh > $ILOG 2>>$ERROR
 	touch $INSTALL_LOG_DIR/samba.log
 }
 
@@ -2857,9 +2857,9 @@ Main()
 			fi
 		fi
 		Install_es
-		if [ -f $TARGET_DIR/AgileAdapterData/Analytics.properties ]
+		if [ -f $TARGET_DIR/AgileAdapterData/ea/Analytics.properties ]
 		then
-			sed -i -e "s/polling_in_seconds: 30/polling_in_seconds: 0/g" $TARGET_DIR/AgileAdapterData/Analytics.properties
+			sed -i -e "s/polling_in_seconds: 30/polling_in_seconds: 0/g" $TARGET_DIR/AgileAdapterData/ea/Analytics.properties
 		fi
 		if [ "$COMBOINSTALL" = "true" ]
 		then
