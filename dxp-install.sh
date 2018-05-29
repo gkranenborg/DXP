@@ -15,7 +15,7 @@ Init()
 # *                                                                                    *
 # **************************************************************************************
 
-	VERSION="14.5"
+	VERSION="14.6"
 	INSTALL_FILE_DIR=`pwd`
 	CONFIG_FILE=$INSTALL_FILE_DIR/dxp.config
 	SOFTWARE=$INSTALL_FILE_DIR/software
@@ -2857,9 +2857,12 @@ Main()
 			fi
 		fi
 		Install_es
-		if [ -f $TARGET_DIR/AgileAdapterData/ea/Analytics.properties ]
+		if [ "$ANALYTICSYNC" = "false" ]
 		then
-			sed -i -e "s/polling_in_seconds: 30/polling_in_seconds: 0/g" $TARGET_DIR/AgileAdapterData/ea/Analytics.properties
+			if [ -f $TARGET_DIR/AgileAdapterData/ea/Analytics.properties ]
+			then
+				sed -i -e "s/polling_in_seconds: 30/polling_in_seconds: 0/g" $TARGET_DIR/AgileAdapterData/ea/Analytics.properties
+			fi
 		fi
 		if [ "$COMBOINSTALL" = "true" ]
 		then
