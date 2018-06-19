@@ -15,7 +15,7 @@ Init()
 # *                                                                                    *
 # **************************************************************************************
 
-	VERSION="14.6"
+	VERSION="15.0"
 	INSTALL_FILE_DIR=`pwd`
 	CONFIG_FILE=$INSTALL_FILE_DIR/dxp.config
 	SOFTWARE=$INSTALL_FILE_DIR/software
@@ -92,6 +92,9 @@ Welcome()
 	REA)
 		BANNER="REA (DXP Lite)"
 	;;
+	ESP)
+		BANNER="ESP"
+	;;
 	esac
 	clear
 	echo " *********************************************************************************************"
@@ -105,7 +108,7 @@ Welcome()
 	if [ "$INPUT" = "n" ]
 	then
 		echo ""
-		echo -n " Which application do you want to install ? IBPM (I), Flowable (F), REA (R) or IBPM + Flowable (C) ? : "
+		echo -n " Which application do you want to install ? IBPM (I), Flowable (F), REA (R), IBPM + Flowable (C) or ESP (E) ? : "
 		read INPUT
 		OLDAPP=$APPLICATION
 		OLDCOMBO=$COMBOINSTALL
@@ -124,6 +127,10 @@ Welcome()
 			;;
 			C)
 				APPLICATION="IBPM"
+				COMBOINSTALL="true"
+			;;
+			E)
+				APPLICATION="ESP"
 				COMBOINSTALL="true"
 			;;
 			*)
@@ -231,7 +238,7 @@ Check_install_files()
 {
 # **************************************************************************************
 # *                                                                                    *
-# * This function will check for the existance of all required installation files.     *
+# * This function will check for the existence of all required installation files.     *
 # * If any of them cannot be found, the installation will be aborted.                  *
 # *                                                                                    *
 # **************************************************************************************
@@ -248,24 +255,27 @@ Check_install_files()
 	
 # **** Checks if application is not Flowable or if only Flowable ****
 	
-	if [ "$APPLICATION" != "FLOWABLE" ]
+	if [ "$APPLICATION" != "FLOWABLE" -a "$APPLICATION" != "ESP" ]
 	then
 		Check_file $SOFTWARE/elasticsearch-$VELK.rpm ELASTIC
 		Check_file $SOFTWARE/elasticsearch-head-master.zip ESHEAD
 	else
-		Check_file $SOFTWARE/apache-tomcat-$VAPACHE.tar.gz APACHE
 		Check_file $SOFTWARE/node-v$VNODE-linux-x64.tar.xz NODE
-		Check_file $SOFTWARE/postgresql96-$VPGDG-1PGDG.rhel7.x86_64.rpm PGDG
-		Check_file $SOFTWARE/postgresql96-libs-$VPGDG-1PGDG.rhel7.x86_64.rpm PGDGLIB
-		Check_file $SOFTWARE/postgresql96-server-$VPGDG-1PGDG.rhel7.x86_64.rpm PGDGSERVER
-		Check_file $SOFTWARE/flowable-$VFLOWABLE.zip FLOWABLE
-		Check_file $FCLASSES/db.properties TMP
-		Check_file $FCLASSES/flowable-admin.xml TMP
-		Check_file $FCLASSES/flowable-idm.xml TMP
-		Check_file $FCLASSES/flowable-modeler.xml TMP
-		Check_file $FCLASSES/flowable-task.xml TMP
-		Check_file $MISC_DIR/flowable-rest.xml TMP
-		Check_file $MISC_DIR/initflowable.sql TMP
+		if [ "$APPLICATION" = "FLOWABLE" ]
+		then
+			Check_file $SOFTWARE/apache-tomcat-$VAPACHE.tar.gz APACHE
+			Check_file $SOFTWARE/postgresql96-$VPGDG-1PGDG.rhel7.x86_64.rpm PGDG
+			Check_file $SOFTWARE/postgresql96-libs-$VPGDG-1PGDG.rhel7.x86_64.rpm PGDGLIB
+			Check_file $SOFTWARE/postgresql96-server-$VPGDG-1PGDG.rhel7.x86_64.rpm PGDGSERVER
+			Check_file $SOFTWARE/flowable-$VFLOWABLE.zip FLOWABLE
+			Check_file $FCLASSES/db.properties TMP
+			Check_file $FCLASSES/flowable-admin.xml TMP
+			Check_file $FCLASSES/flowable-idm.xml TMP
+			Check_file $FCLASSES/flowable-modeler.xml TMP
+			Check_file $FCLASSES/flowable-task.xml TMP
+			Check_file $MISC_DIR/flowable-rest.xml TMP
+			Check_file $MISC_DIR/initflowable.sql TMP
+		fi
 	fi
 	
 # **** Checks if application is IBPM ****	
@@ -305,6 +315,14 @@ Check_install_files()
 		Check_file $REA_DIR/nginx.conf TMP
 		Check_file $REA_DIR/mybackup.tar TMP
 		Check_file $REA_DIR/rea.zip TMP
+	fi
+	
+	if [ "$APPLICATION" = "ESP" ]
+	then
+		Check_file $SOFTWARE/jboss-eap-$VJBOSS.zip JBOSS
+		Check_file $SOFTWARE/Patch/BZ-1358913.zip JBOSSBZ
+		Check_file $SOFTWARE/mongodb-linux-x86_64-rhel70-3.6.5.tgz MONGO
+		Check_file $MISC_DIR/mongodb-driver-3.7.1.jar MONGODRIVER
 	fi
 }
 
@@ -398,6 +416,9 @@ Change_os_settings()
 				REA)
 					NEWHOSTNAME="$REAHOSTNAME"
 				;;
+				ESP)
+					NEWHOSTNAME="$ESPHOSTNAME"
+				;;
 			esac
 			hostnamectl set-hostname $NEWHOSTNAME> $ILOG 2>>$ERROR
 			ret=$?
@@ -488,6 +509,9 @@ Install_scripts()
 		;;
 		REA)
 			APPNAME="( Lite )     "
+		;;
+		ESP)
+			APPNAME="( ESP )      "
 		;;
 	esac
 	echo "#!/bin/bash" > /etc/rc.d/rc.local
@@ -936,37 +960,45 @@ Jdbc_config()
 # *                                                                                    *
 # **************************************************************************************
 	echo "*** Configuring JBoss ***" >>$ERROR
-	if [ "$IBPMDB" = "oracle" ]
+	case "$APPLICATION" in
+		IBPM)
+			if [ "$IBPMDB" = "oracle" ]
+			then
+				. /u01/app/oracle/product/11.2.0/xe/bin/oracle_env.sh 2>>$ERROR
+			fi
+			if [ ! -f $INSTALL_LOG_DIR/jbossmodule.log ]
+			then
+				case "$IBPMDB" in
+					oracle)
+						echo "module add --name=com.oracle.jdbc --resources=$ORACLE_HOME/jdbc/lib/ojdbc6.jar --dependencies=javax.api,javax.transaction.api">$INSTALL_LOG_DIR/cliscript 2>>$ERROR
+					;;
+					postgresas)
+						POSTGRESJAR=`ls $TARGET_DIR/edb/connectors/jdbc/edb-*17.jar`
+						echo "module add --name=com.postgres.jdbc --resources=$POSTGRESJAR --dependencies=javax.api,javax.transaction.api">$INSTALL_LOG_DIR/cliscript 2>>$ERROR
+					;;
+				esac
+			fi
+		;;
+		ESP)
+			MONGOJAR=`ls $TARGET_DIR/db/mongodb*.jar`
+			echo "module add --name=com.mongodb.jdbc --resources=$MONGOJAR --dependencies=javax.api,javax.transaction.api">$INSTALL_LOG_DIR/cliscript 2>>$ERROR
+		;;
+	esac
+	echo "quit">>$INSTALL_LOG_DIR/cliscript 2>>$ERROR
+	$TARGET_DIR/jboss-eap-6.4/bin/jboss-cli.sh --file=$INSTALL_LOG_DIR/cliscript 2>>$ERROR
+	ret=$?
+	if [ $ret -ne 0 ]
 	then
-		. /u01/app/oracle/product/11.2.0/xe/bin/oracle_env.sh 2>>$ERROR
-	fi
-	if [ ! -f $INSTALL_LOG_DIR/jbossmodule.log ]
-	then
-		case "$IBPMDB" in
-			oracle)
-				echo "module add --name=com.oracle.jdbc --resources=$ORACLE_HOME/jdbc/lib/ojdbc6.jar --dependencies=javax.api,javax.transaction.api">$INSTALL_LOG_DIR/cliscript 2>>$ERROR
-			;;
-			postgresas)
-				POSTGRESJAR=`ls $TARGET_DIR/edb/connectors/jdbc/edb-*17.jar`
-				echo "module add --name=com.postgres.jdbc --resources=$POSTGRESJAR --dependencies=javax.api,javax.transaction.api">$INSTALL_LOG_DIR/cliscript 2>>$ERROR
-			;;
-		esac
-		echo "quit">>$INSTALL_LOG_DIR/cliscript 2>>$ERROR
-		$TARGET_DIR/jboss-eap-6.4/bin/jboss-cli.sh --file=$INSTALL_LOG_DIR/cliscript 2>>$ERROR
-		ret=$?
-		if [ $ret -ne 0 ]
-		then
-			clear
-			echo ""
-			echo " The JDBC / JBoss configuration failed."
-			echo ""
-			echo " The errorcode is : $ret"
-			echo ""
-			Abort_install
-		else
-			rm -rf $INSTALL_LOG_DIR/cliscript
-			touch $INSTALL_LOG_DIR/jbossmodule.log
-		fi
+		clear
+		echo ""
+		echo " The JDBC / JBoss configuration failed."
+		echo ""
+		echo " The errorcode is : $ret"
+		echo ""
+		Abort_install
+	else
+		rm -rf $INSTALL_LOG_DIR/cliscript
+		touch $INSTALL_LOG_DIR/jbossmodule.log
 	fi
 	$TARGET_DIR/jboss-eap-6.4/bin/add-user.sh -s $JBOSSUSER $JBOSSPWD > $ILOG 2>>$ERROR
 	ret=$?
@@ -1480,7 +1512,10 @@ Install_war()
 					mkdir $TARGET_DIR/AgileAdapterData 2>>$ERROR
 					mkdir $TARGET_DIR/BPM_Temp_Files 2>>$ERROR
 					mkdir -p $INSTALL_LOG_DIR/WEB-INF/lib >$ILOG 2>>$ERROR
-					cp $TARGET_DIR/engine/client/lib/iFlow.jar $INSTALL_LOG_DIR/WEB-INF/lib >$ILOG 2>>$ERROR
+					if [ "$APPLICATION" != "ESP" ]
+					then
+						cp $TARGET_DIR/engine/client/lib/iFlow.jar $INSTALL_LOG_DIR/WEB-INF/lib >$ILOG 2>>$ERROR
+					fi
 					cd $INSTALL_LOG_DIR
 					jar xvf $INSTALL_LOG_DIR/aa.war -x WEB-INF/EmailNotification.properties >$ILOG 2>>$ERROR
 					jar xvf $INSTALL_LOG_DIR/aa.war -x WEB-INF/iFlowClient.properties >$ILOG 2>>$ERROR
@@ -1705,7 +1740,12 @@ Deploy_war()
 	warname=`echo $1|rev|cut -f1 -d"/"|rev`
 	appname=`echo $warname|cut -f1 -d"."`
 	echo "connect" > $INSTALL_LOG_DIR/cliscript 2>>$ERROR
-	echo "deploy $1 --server-groups=iflow-server-group" >> $INSTALL_LOG_DIR/cliscript 2>>$ERROR
+	if [ "$APPLICATION" = "ESP" ]
+	then
+		echo "deploy $1 --disabled" >> $INSTALL_LOG_DIR/cliscript 2>>$ERROR
+	else
+		echo "deploy $1 --server-groups=iflow-server-group" >> $INSTALL_LOG_DIR/cliscript 2>>$ERROR
+	fi
 	echo "quit" >> $INSTALL_LOG_DIR/cliscript 2>>$ERROR
 	$TARGET_DIR/jboss-eap-6.4/bin/jboss-cli.sh --file=$INSTALL_LOG_DIR/cliscript 2>>$ERROR
 	ret=$?
@@ -1946,7 +1986,7 @@ Create_appversion()
 {
 # **************************************************************************************
 # *                                                                                    *
-# * This function will a json file containing all applications and versions installed. *
+# * This function will create a json file containing all applications and versions installed. *
 # *                                                                                    *
 # **************************************************************************************
 	echo "*** Creating appversion json file ***" >>$ERROR
@@ -1960,6 +2000,7 @@ Create_appversion()
 	CHATVERSION="unknown"
 	case "$APPLICATION" in
 		IBPM)
+			ESPINSTALLED="false"
 			if [ "$IBPMDB" = "postgresas" ]
 			then
 				DBVERSION="PostgresAS $VPPAS"
@@ -2026,6 +2067,7 @@ Create_appversion()
 			NGINXVERSION="not installed"
 		;;
 		FLOWABLE)
+			ESPINSTALLED="false"
 			DBVERSION="Postgres $VPGDG"
 			JBOSS_VERSION="not installed"
 			IBPM_VERSION="not installed"
@@ -2048,6 +2090,7 @@ Create_appversion()
 			BALVERSION="not installed"
 		;;
 		REA)
+			ESPINSTALLED="false"
 			DBVERSION="not installed"
 			JBOSS_VERSION="not installed"
 			IBPM_VERSION="not installed"
@@ -2070,9 +2113,38 @@ Create_appversion()
 			nginx -v 2>$INSTALL_LOG_DIR/nginxversion
 			NGINXVERSION=`cat $INSTALL_LOG_DIR/nginxversion|cut -f2 -d"/"`
 		;;
+		ESP)
+			ESPINSTALLED="true"
+			DBVERSION="MongoDB $VMONGO"
+			JBOSS_VERSION="6.4.9"
+			IBPM_VERSION="not installed"
+			jar xvf $INSTALL_FILE_DIR/options/aa.war WEB-INF/BuildInfo.properties >$ILOG
+			AAVERSION=`cat WEB-INF/BuildInfo.properties|cut -f2 -d"="|grep "-"`
+			rm -rf WEB-INF >$ILOG
+			jar xvf $INSTALL_FILE_DIR/options/posthoc.war WEB-INF/BuildInfo.properties >$ILOG
+			MAILVERSION=`cat WEB-INF/BuildInfo.properties|cut -f2 -d"="|grep "-"`
+			rm -rf WEB-INF >$ILOG
+			jar xvf $INSTALL_FILE_DIR/options/ssofi.war WEB-INF/BuildInfo.properties >$ILOG
+			SSOFIVERSION=`cat WEB-INF/BuildInfo.properties|cut -f2 -d"="|grep "-"`
+			rm -rf WEB-INF >$ILOG
+			ALFRESCOVERSION="not installed"
+			FLOWABLEVERSION="not installed"
+			TOMCATVERSION="not installed"
+			REAVERSION="not installed"
+			DBINSTALLED="true"
+			JBOSSINSTALLED="true"
+			IBPMINSTALLED="false"
+			ESINSTALLED="false"
+			REAINSTALLED="false"
+			NGINXINSTALLED="false"
+			ALFRESCOINSTALLED="false"
+			FLOWABLEINSTALLED="false"
+			NGINXVERSION="not installed"
+			BALVERSION="not installed"
+		;;
 	esac
 	echo "{\"installdate\":\"$INSTALLDATE\",\"script\":\"$VERSION\",\"vmversion\":\"$VMVERSION\",\"osversion\":\"$OSRELEASE\",\"jdk8\":\"$VJDK8\",\"database\":\"$DBVERSION\",\"jboss\":\"$JBOSS_VERSION\",\"ibpm\":\"$IBPM_VERSION\",\"es\":\"$VELK\",\"chat\":\"$CHATVERSION\",\"aa\":\"$AAVERSION\",\"email\":\"$MAILVERSION\",\"ssofi\":\"$SSOFIVERSION\",\"ballib\":\"$BALVERSION\",\"alfresco\":\"$ALFRESCOVERSION\",\"flowable\":\"$FLOWABLEVERSION\",\"tomcat\":\"$TOMCATVERSION\",\"rea\":\"$REAVERSION\",\"nginx\":\"$NGINXVERSION\"}" >$APPVERSIONFILE
-	echo "{\"database\":\"$DBINSTALLED\",\"jboss\":\"$JBOSSINSTALLED\",\"ibpm\":\"$IBPMINSTALLED\",\"es\":\"$ESINSTALLED\",\"rea\":\"$REAINSTALLED\",\"nginx\":\"$NGINXINSTALLED\",\"alfresco\":\"$ALFRESCOINSTALLED\",\"flowable\":\"$FLOWABLEINSTALLED\"}" >$APPINSTALLFILE
+	echo "{\"database\":\"$DBINSTALLED\",\"jboss\":\"$JBOSSINSTALLED\",\"ibpm\":\"$IBPMINSTALLED\",\"esp\":\"$ESPINSTALLED\",\"es\":\"$ESINSTALLED\",\"rea\":\"$REAINSTALLED\",\"nginx\":\"$NGINXINSTALLED\",\"alfresco\":\"$ALFRESCOINSTALLED\",\"flowable\":\"$FLOWABLEINSTALLED\"}" >$APPINSTALLFILE
 }
 
 Cleanup_install()
@@ -2315,6 +2387,60 @@ Install_es()
 	fi
 }
 
+Install_mongo()
+{
+	echo "*** Installing MongoDB ***" >>$ERROR
+	if [ ! -f $INSTALL_LOG_DIR/mongo.log ]
+	then
+		tar -zxvf $MONGOFILE -C $TARGET_DIR >$ILOG 2>>$ERROR
+		ret=$?
+		if [ $ret -ne 0 ]
+		then
+			Screen_output 0 "Mongo DB did not get installed !!"
+			echo ""
+			echo " The errorcode is : $ret"
+			echo ""
+			Continue
+		fi
+		cd /opt/mongo* >$ILOG 2>>$ERROR
+		MONGODIR=`pwd` >$ILOG 2>>$ERROR
+		cd $INSTALL_FILE_DIR >$ILOG 2>>$ERROR
+		echo "export \$PATH=$MONGODIR/bin:\$PATH">>/root/.bashrc
+		mkdir $TARGET_DIR/db >$ILOG 2>>$ERROR
+		chmod 755 $TARGET_DIR/db >$ILOG 2>>$ERROR
+		cp $MONGODRIVERFILE $TARGET_DIR/db >$ILOG 2>>$ERROR
+		echo "#!/bin/sh" > /etc/rc.d/init.d/mongo
+		echo "#" >> /etc/rc.d/init.d/mongo
+		echo "# chkconfig: 3 75 05" >> /etc/rc.d/init.d/mongo
+		echo "#" >> /etc/rc.d/init.d/mongo
+		echo "PATH=$TARGET_DIR/mongodb-linux-x86_64-rhel70-3.6.5/bin:/sbin:/bin:/usr/sbin:/usr/bin:/usr/local/sbin:/usr/local/bin" >> /etc/rc.d/init.d/mongo
+		echo "case \"\$1\" in" >> /etc/rc.d/init.d/mongo
+		echo "start)" >> /etc/rc.d/init.d/mongo
+		echo "	$TARGET_DIR/mongodb-linux-x86_64-rhel70-3.6.5/bin/mongod --dbpath $TARGET_DIR/db >/dev/null 2>&1 &" >> /etc/rc.d/init.d/mongo
+		echo "	echo \$! >$TARGET_DIR/utilities/mongopid" >> /etc/rc.d/init.d/mongo
+		echo ";;" >> /etc/rc.d/init.d/mongo
+		echo "stop)" >> /etc/rc.d/init.d/mongo
+		echo "	kill \`cat $TARGET_DIR/utilities/mongopid\`" >> /etc/rc.d/init.d/mongo
+		echo ";;" >> /etc/rc.d/init.d/mongo
+		echo "esac" >> /etc/rc.d/init.d/mongo
+		chmod 755 /etc/rc.d/init.d/mongo 2>>$ERROR
+		chkconfig --add mongo 2>>$ERROR
+		chkconfig --level 3 mongo on 2>>$ERROR
+		service mongo start >$ILOG 2>>$ERROR
+		ret=$?
+		if [ $ret -ne 0 ]
+		then
+			Screen_output 0 "Mongo DB failed to start !!"
+			echo ""
+			echo " The errorcode is : $ret"
+			echo ""
+			Continue
+		else
+			touch $INSTALL_LOG_DIR/mongo.log
+		fi
+	fi
+}
+
 Screen_output()
 {
 # **************************************************************************************
@@ -2423,6 +2549,9 @@ Paint_screen()
 			REA)
 				BANNER="REA (DXP Lite)"
 			;;
+			ESP)
+				BANNER="ESP"
+			;;
 		esac
 		Show_banner
 		cat $INSTSCREEN
@@ -2520,9 +2649,17 @@ Create_screens()
 				echo "	Starting Tomcat ............................. Waiting" >> $INSTSCREEN
 			;;
 			REA)
-			echo "	Installing Elastic Search ................... Waiting" >> $INSTSCREEN
-			echo "	Installing E.S. GUI ......................... Waiting" >> $INSTSCREEN
-			echo "	Installing REA .............................. Waiting" >> $INSTSCREEN
+				echo "	Installing Elastic Search ................... Waiting" >> $INSTSCREEN
+				echo "	Installing E.S. GUI ......................... Waiting" >> $INSTSCREEN
+				echo "	Installing REA .............................. Waiting" >> $INSTSCREEN
+			;;
+			ESP)
+				echo "	Installing MongoDB .......................... Waiting" >> $INSTSCREEN
+				echo "	Installing JBoss ............................ Waiting" >> $INSTSCREEN
+				echo "	Installing Patches for JBoss ................ Waiting" >> $INSTSCREEN
+				echo "	Starting JBoss .............................. Waiting" >> $INSTSCREEN
+				echo "	Configuring JBoss ........................... Waiting" >> $INSTSCREEN
+				echo "	Installing war files ........................ Waiting" >> $INSTSCREEN
 			;;
 		esac
 		echo "	Creating App. version files ................. Waiting" >> $INSTSCREEN
@@ -2883,6 +3020,85 @@ Main()
 				Paint_screen
 				Install_rea
 				sed -i -e 's/Installing REA .............................. Running/Installing REA .............................. Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
+			fi
+		;;
+		ESP)
+			if [ ! -f $INSTALL_LOG_DIR/mongo.log ]
+			then
+				sed -i -e 's/Installing MongoDB .......................... Waiting/Installing MongoDB .......................... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
+				Install_mongo
+				sed -i -e 's/Installing MongoDB .......................... Running/Installing MongoDB .......................... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
+			fi
+			if [ ! -f $INSTALL_LOG_DIR/jboss.log ]
+			then
+				sed -i -e 's/Installing JBoss ............................ Waiting/Installing JBoss ............................ Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
+				Install_jboss
+				sed -i -e 's/Installing JBoss ............................ Running/Installing JBoss ............................ Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
+			fi
+			if [ ! -f $INSTALL_LOG_DIR/jbosspatches.log ]
+				then
+					sed -i -e 's/Installing Patches for JBoss ................ Waiting/Installing Patches for JBoss ................ Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+					Paint_screen
+					PNUM=1
+					for patch in `ls $INSTALL_FILE_DIR/software/Patch/jboss-eap-6/jboss-eap-6.4.?.CP.zip`
+					do
+						if [ ! -f $INSTALL_LOG_DIR/jbosspatch$PNUM ]
+						then
+							$TARGET_DIR/jboss-eap-6.4/bin/jboss-cli.sh --command="patch apply $patch" >$ILOG 2>>$ERROR
+							ret=$?
+							if [ $ret -ne 0 ]
+							then
+								Screen_output 0 " JBoss patch $patch failed to install !!"
+								Continue
+							else
+								touch $INSTALL_LOG_DIR/jbosspatch$PNUM
+								PNUM=`expr $PNUM + 1`
+							fi
+						fi
+					done	
+					if [ ! -f $INSTALL_LOG_DIR/jbosspatchBZ1358913 ]
+					then
+						$TARGET_DIR/jboss-eap-6.4/bin/jboss-cli.sh --command="patch apply $INSTALL_FILE_DIR/software/Patch/BZ-1358913.zip" >$ILOG 2>>$ERROR
+						ret=$?
+						if [ $ret -ne 0 ]
+						then
+							Screen_output 0 " JBoss patch BZ-1358913 failed to install !!"
+							Continue
+						else
+							touch $INSTALL_LOG_DIR/jbosspatchBZ1358913
+						fi
+					fi
+					touch $INSTALL_LOG_DIR/jbosspatches.log
+					sed -i -e 's/Installing Patches for JBoss ................ Running/Installing Patches for JBoss ................ Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+					Paint_screen
+			fi
+			if [ ! -f $INSTALL_LOG_DIR/jbossstart.log ]
+			then
+				sed -i -e 's/Starting JBoss .............................. Waiting/Starting JBoss .............................. Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
+				Jboss_startup
+				sed -i -e 's/Starting JBoss .............................. Running/Starting JBoss .............................. Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
+			fi
+			if [ ! -f $INSTALL_LOG_DIR/jdbcconfig.log ]
+			then
+				sed -i -e 's/Configuring JBoss ........................... Waiting/Configuring JBoss ........................... Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
+				Jdbc_config
+				sed -i -e 's/Configuring JBoss ........................... Running/Configuring JBoss ........................... Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
+			fi
+			if [ ! -f $INSTALL_LOG_DIR/warinstalled.log ]
+			then
+				sed -i -e 's/Installing war files ........................ Waiting/Installing war files ........................ Running/g' $INSTSCREEN >$ILOG 2>>$ERROR
+				Paint_screen
+				Install_war
+				sed -i -e 's/Installing war files ........................ Running/Installing war files ........................ Completed/g' $INSTSCREEN >$ILOG 2>>$ERROR
 				Paint_screen
 			fi
 		;;

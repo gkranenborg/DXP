@@ -32,6 +32,15 @@ Checks()
 			Databasestatus="Stopped"
 	    fi
 	fi
+	if [ -f /etc/rc.d/init.d/mongo ]
+	then
+		if ps -ef|grep "mongod"|grep -v grep >/dev/null
+		then
+			Databasestatus="Running"
+		else
+			Databasestatus="Stopped"
+		fi
+	fi
 	if [ -f /etc/rc.d/init.d/postgres ]
 	then	
 		if ps -ef|grep "postgres -D"|grep -v grep >/dev/null
